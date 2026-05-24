@@ -1,3 +1,13 @@
+@.claude/loa/CLAUDE.loa.md
+
+> ⚠️ **SUPERSEDED IN PART (2026-05-24) — `grimoires/loa/prd.md` (PRD v3.0) is the authoritative current plan.**
+> This repo is renamed **freeside-auth → identity-api** and graduated to the ecosystem's central identity **source-of-truth (SoR)**. PRD v3.0 **reverses three hard-rules stated below** (they reflect the 2026-04-30 Phase-0 stance):
+> 1. **Writer (D1):** identity-api **writes** the canonical spine (mint user / wallets[] / credentials / per-world nyms). midi → one-time backfill → then **reads** from identity-api. ⟶ supersedes *"midi is the SINGLE WRITER"* below.
+> 2. **Signer (D7):** v1 ships a **local ES256 signer** behind the `JWTSigner` port; the loa-freeside Rust gateway is a **preserved delegation seam, not v1**. ⟶ supersedes *"ships a validator … NOT a signer"* below.
+> 3. **Name + distribution:** the building is **identity-api**; external consumption is **source-distributed** (`@0xhoneyjar/identity` vendored source, **NOT** an npm dependency).
+>
+> The full rewrite of this file + `docs/INTENT.md` + the BeaconV3 `is_not` to the SoR posture is **Phase-1 G-1 build work** (lands through review). **Until then, where this file and PRD v3.0 disagree, PRD v3.0 wins.**
+
 # freeside-auth — agent instructions
 
 This is a freeside-* installable module: **identity overlay** (wallet → canonical user_id + handles + JWT claims). Six packages: `protocol/` (sealed schemas), `ports/` (TS interfaces), `adapters/` (Postgres + JWKS validator + credential bridges), `mcp-tools/` (agent surface), `engine/` (4-tier resolve + credential-link + JWT helpers), `ui/` (shared admin React components — future).

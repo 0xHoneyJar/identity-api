@@ -2,7 +2,7 @@
 title: freeside-auth — Sprint Plan
 date: 2026-04-30
 phase: Phase 3 (Sprint Plan) — planning-sprints skill output
-status: ready-for-implementation
+status: SUPERSEDED 2026-05-24 by grimoires/loa/prd.md (PRD v3.0) + beads reconciliation — retained for provenance
 operator: zksoju
 authoring_agent: Claude Opus 4.7 (1M)
 authoring_persona: KRANZ (construct-freeside flight director)

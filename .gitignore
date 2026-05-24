@@ -11,3 +11,6 @@ coverage/
 .vscode/
 .idea/
 .run/
+
+# Loa disabled skills (feature-gated)
+.claude/.skills-disabled/

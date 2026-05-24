@@ -2,7 +2,7 @@
 title: freeside-auth — Software Design Document
 date: 2026-04-30
 phase: Phase 2 (SDD) — designing-architecture skill output
-status: ready-for-sprint-plan
+status: SUPERSEDED 2026-05-24 by grimoires/loa/prd.md (PRD v3.0) — retained for canonical-spine + JWKS detail
 operator: zksoju
 authoring_agent: Claude Opus 4.7 (1M)
 authoring_persona: KRANZ (construct-freeside flight director)

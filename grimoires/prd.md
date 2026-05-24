@@ -2,7 +2,7 @@
 title: freeside-auth — Product Requirements Document
 date: 2026-04-30
 phase: Phase 1 (PRD) — discovering-requirements skill output
-status: ready-for-architect
+status: SUPERSEDED 2026-05-24 by grimoires/loa/prd.md (PRD v3.0) — retained for provenance
 operator: zksoju
 authoring_agent: Claude Opus 4.7 (1M)
 parent_seed: ~/bonfire/grimoires/bonfire/context/freeside-auth-requirements-seed-2026-04-29.md

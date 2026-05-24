@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/0xHoneyJar/freeside-auth.git"
+    "url": "https://github.com/0xHoneyJar/identity-api.git"
   },
   "workspaces": [
     "packages/protocol",
