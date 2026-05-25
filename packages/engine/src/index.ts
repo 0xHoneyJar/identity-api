@@ -76,3 +76,16 @@ export {
   type MintAuthNonceOpts,
   type ConsumeAuthNonceOpts,
 } from './auth-nonces';
+
+// Compose primitives (T2.2 · per-source timeout + in-memory circuit-breaker).
+// Consumed by `compose-profile.ts` (T2.2 orchestrator) and re-exportable for
+// any future fan-out orchestrator that needs the same wire primitives.
+export {
+  withTimeout,
+  type TimeoutHandle,
+} from './with-timeout';
+export {
+  CircuitBreaker,
+  type CircuitBreakerOpts,
+  type CircuitBreakerState,
+} from './circuit-breaker';

@@ -38,6 +38,14 @@
  *   - `parse_error`    — 2xx body failed Zod validation (schema drift)
  *   - `network_error`  — DNS failure, connection refused, TLS error,
  *                        connection reset, body read mid-stream, etc.
+ *   - `circuit_open`   — the orchestrator's in-memory circuit-breaker for
+ *                        this source is OPEN (sustained outage); call was
+ *                        skipped without an HTTP attempt. NOT a wire-level
+ *                        outcome — synthesized by the compose orchestrator
+ *                        (T2.2 `compose-profile.ts`) when `breaker.isOpen()`
+ *                        before the dispatch. Per SDD §6.4 the breaker
+ *                        prevents paying the full per-source timeout when
+ *                        the upstream is known-down.
  *
  * The `statusCode` field is populated when an HTTP response was received
  * (4xx/5xx); it's absent on timeout / network errors that occurred before
@@ -52,6 +60,7 @@ export type FederationFailureKind =
   | "upstream_5xx"
   | "parse_error"
   | "network_error"
+  | "circuit_open"
 
 /**
  * Structured failure with kind + diagnostic context.
