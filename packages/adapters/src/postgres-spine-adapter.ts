@@ -783,10 +783,14 @@ export class PostgresSpineAdapter implements SpinePort {
 /**
  * PG unique-violation detection.
  *
- * Bun.SQL surfaces PG errors as objects with `code` and/or `errno`
- * matching PG's SQLSTATE. `23505` is `unique_violation` per PG docs.
- * Some clients also stamp the constraint name on `.constraint_name` or
- * `.detail`; we accept either path for the SQLSTATE check.
+ * Bun.SQL surfaces PG errors as `PostgresError` objects with the SQLSTATE
+ * on `.errno` (e.g., `'23505'` for unique_violation) and a generic driver
+ * tag on `.code` (e.g., `'ERR_POSTGRES_SERVER_ERROR'`). Older drivers /
+ * the `pg` lib put the SQLSTATE on `.code` instead. We check both.
+ *
+ * Empirically verified against postgres:18.1 + Bun.SQL 1.3.x (T1.6):
+ *   {code: 'ERR_POSTGRES_SERVER_ERROR', errno: '23505',
+ *    constraint: 'uq_wallet_links_active_address', ...}
  */
 function isUniqueViolation(err: unknown): boolean {
   if (err === null || typeof err !== "object") return false

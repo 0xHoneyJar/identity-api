@@ -401,17 +401,49 @@ export class WalletLinkRaceError extends Error {
   }
 }
 
-/** Heuristic: is this PG error from a wallet_links uniqueness violation? */
+/**
+ * Heuristic: is this PG error from a wallet_links uniqueness violation?
+ *
+ * Bun.SQL surfaces PG errors as `PostgresError` objects with:
+ *   - `code: 'ERR_POSTGRES_SERVER_ERROR'` (driver-side classification, NOT
+ *     the SQLSTATE — important: the SQLSTATE lives on `errno`)
+ *   - `errno: '23505'` (the SQLSTATE for unique_violation)
+ *   - `constraint: 'uq_wallet_links_active_address'` (PG's constraint name)
+ *   - `detail` + `message` (human-readable + duplicate-key signature)
+ *
+ * We check both the SQLSTATE (via `errno`) AND the constraint name to be
+ * precise — a 23505 on a DIFFERENT index (e.g., users PK collision, which
+ * shouldn't happen with UUID v4 but defense-in-depth) should NOT be
+ * classified as a wallet-link race.
+ *
+ * Fallback paths:
+ *   - `e.code === '23505'` — defends against drivers that put SQLSTATE on
+ *     `.code` instead of `.errno` (older pg / different adapters)
+ *   - message substring match — last-resort when constraint name isn't on
+ *     the error object
+ */
 function isWalletLinkConflict(err: unknown): boolean {
   if (err === null || typeof err !== "object") return false
-  const e = err as { code?: unknown; message?: unknown; constraint_name?: unknown }
-  const code = e.code === "23505"
-  if (!code) return false
-  // Narrow further to the active-address index when surfaced — defends
-  // against the (rare) case where some other uniqueness violation on the
-  // same INSERT path bubbles up. Bun.SQL may surface constraint name on
-  // `.constraint_name` or in `.message` text.
-  const cn = typeof e.constraint_name === "string" ? e.constraint_name : ""
+  const e = err as {
+    code?: unknown
+    errno?: unknown
+    message?: unknown
+    constraint?: unknown
+    constraint_name?: unknown
+  }
+  // SQLSTATE 23505 = unique_violation. Bun.SQL puts SQLSTATE on `errno`;
+  // older pg lib puts it on `code`. Check both.
+  const isUniqueViolation =
+    e.errno === "23505" || e.code === "23505"
+  if (!isUniqueViolation) return false
+  // Now narrow to the wallet_links-specific constraints. Bun.SQL surfaces
+  // constraint name on `.constraint`; some adapters use `.constraint_name`.
+  const cn =
+    typeof e.constraint === "string"
+      ? e.constraint
+      : typeof e.constraint_name === "string"
+        ? e.constraint_name
+        : ""
   const msg = typeof e.message === "string" ? e.message : ""
   return (
     cn === "uq_wallet_links_active_address" ||
