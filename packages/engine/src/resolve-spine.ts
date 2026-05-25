@@ -466,7 +466,7 @@ function isWalletLinkConflict(err: unknown): boolean {
  * — adding chain-specific normalizers when those chains land is a one-line
  * extension here.
  */
-function normalizeAddress(address: string): string {
+export function normalizeAddress(address: string): string {
   if (address.startsWith("0x") || address.startsWith("0X")) {
     return address.toLowerCase()
   }

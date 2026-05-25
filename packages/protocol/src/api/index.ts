@@ -60,8 +60,10 @@ export {
 export {
   LinkVerifiedWalletReqSchema,
   LinkVerifiedWalletRespSchema,
+  LinkVerifiedWalletConflictSchema,
   type LinkVerifiedWalletReq,
   type LinkVerifiedWalletResp,
+  type LinkVerifiedWalletConflict,
 } from "./link"
 
 // ─── federation contracts (T2.1) ────────────────────────────────────────────

@@ -473,12 +473,18 @@ describe("client.mibera.dimensions (FR-M1 / G-6, T3.1 wired)", () => {
   })
 })
 
-describe("client.link.verifiedWallet (FR-C1, T4.1 stub)", () => {
-  it("throws NotImplementedError(501) until T4.1 lands (and sends the service token header)", async () => {
-    const client = createIdentityClient({ baseUrl })
-    let err: unknown
+describe("client.link.verifiedWallet (FR-C1, T4.1 wired)", () => {
+  it("returns 200 + linked user when service token matches (creates new user on both-null)", async () => {
+    // LINK_SERVICE_TOKEN must be set BEFORE the app boots for the route's
+    // get-at-request-time check to read it. This test sets per-test via
+    // env mutation; route reads on each call.
+    const previousToken = process.env.LINK_SERVICE_TOKEN
+    process.env.LINK_SERVICE_TOKEN = "test-s2s-token"
     try {
-      await client.link.verifiedWallet(
+      // Spine resolves return null for both → orchestrator creates user.
+      mockSpine.resolveByWalletReturns = null
+      const client = createIdentityClient({ baseUrl })
+      const resp = await client.link.verifiedWallet(
         {
           worldSlug: "mibera",
           discordId: "disc-7777",
@@ -486,10 +492,40 @@ describe("client.link.verifiedWallet (FR-C1, T4.1 stub)", () => {
         },
         { serviceToken: "test-s2s-token" },
       )
-    } catch (e) {
-      err = e
+      // Tolerant assertion: orchestrator returned a user_id (mocked mintUser)
+      // and the SDK round-tripped the typed envelope.
+      expect(resp.ok).toBe(true)
+      expect(typeof resp.user_id).toBe("string")
+      expect(resp.wallet_address).toBe("0xabc0000000000000000000000000000000000001")
+    } finally {
+      if (previousToken === undefined) delete process.env.LINK_SERVICE_TOKEN
+      else process.env.LINK_SERVICE_TOKEN = previousToken
     }
-    expect(err).toBeInstanceOf(NotImplementedError)
+  })
+
+  it("throws UnauthorizedError(401) when service token is missing/wrong", async () => {
+    const previousToken = process.env.LINK_SERVICE_TOKEN
+    process.env.LINK_SERVICE_TOKEN = "test-s2s-token"
+    try {
+      const client = createIdentityClient({ baseUrl })
+      let err: unknown
+      try {
+        await client.link.verifiedWallet(
+          {
+            worldSlug: "mibera",
+            discordId: "disc-7777",
+            walletAddress: "0xabc0000000000000000000000000000000000001",
+          },
+          { serviceToken: "wrong-token" },
+        )
+      } catch (e) {
+        err = e
+      }
+      expect(err).toBeInstanceOf(UnauthorizedError)
+    } finally {
+      if (previousToken === undefined) delete process.env.LINK_SERVICE_TOKEN
+      else process.env.LINK_SERVICE_TOKEN = previousToken
+    }
   })
 })
 

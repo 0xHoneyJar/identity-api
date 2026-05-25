@@ -120,3 +120,18 @@ export {
   type ComposeMiberaDimensionsOpts,
   type ComposeMiberaDimensionsInput,
 } from './compose-mibera-dimensions';
+
+// Link-verified-wallet orchestrator (T4.1 · POST /v1/link/verified-wallet).
+// The cycle-c redirect ingress — receives verified linkage writes from
+// Sietch, applies D8/FR-L3 conflict policy server-side (injectable resolver
+// per OQ-2), upserts spine atomically, audits every outcome.
+export {
+  linkVerifiedWallet,
+  latestWinsResolver,
+  LinkCrossUserCollisionError,
+  type LinkVerifiedWalletInput,
+  type LinkVerifiedWalletResult,
+  type ConflictState,
+  type ConflictDecision,
+  type ConflictResolver,
+} from './link-verified-wallet';

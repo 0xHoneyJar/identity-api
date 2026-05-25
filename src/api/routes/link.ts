@@ -1,22 +1,54 @@
 /**
- * Linkage ingress — service-to-service write from Sietch verify (SDD §5.5).
+ * Linkage ingress — service-to-service write from Sietch verify (SDD §5.5 / T4.1).
  *
- * STUB: T1.1 wires the route; real impl (D8 conflict policy server-side
- * + spine upsert + audit) lands in T4.1 (bead arrakis-hyde).
+ * Auth: `X-Service-Token` header. The configured token comes from
+ * `LINK_SERVICE_TOKEN` env (production); tests set the env before importing
+ * the module. Missing/wrong token → 401 unauthorized.
  *
- * Note: this route is service-to-service (NOT a user session). Auth is
- * bearer/api-key (TBD which header — `X-Service-Token` or `Authorization:
- * Bearer`). Sprint-1.x will codify the chosen mechanism.
+ * Conflict policy is applied server-side per SDD §8.2 / D8 / cycle-c FR-L3
+ * via the injectable `ConflictResolver` strategy (OQ-2 seam). The default
+ * `latestWinsResolver` is used by this route; swapping to first-claim-wins
+ * is a single function-pointer change.
+ *
+ * Per FR-C3: hard-fail on `cross_user_collision` returns 409; every other
+ * conflict case (rebind, idempotent no-op, create) returns 200.
  */
 
+import { createHash, timingSafeEqual } from "node:crypto"
 import { jsonResponse } from "@hyper/core"
 import { route } from "../../auth"
-// T1.10 — request schema hoisted to @freeside-auth/protocol/api so the SDK
-// can expose `client.link.verifiedWallet({ … })` with full input typing
-// today, even though the handler is a 501 stub until T4.1.
-import { LinkVerifiedWalletReqSchema as LinkVerifiedWalletReq } from "@freeside-auth/protocol/api"
+import { getSpine } from "../spine"
+import {
+  linkVerifiedWallet as linkVerifiedWalletOrchestrator,
+  LinkCrossUserCollisionError,
+} from "@freeside-auth/engine"
+import {
+  LinkVerifiedWalletReqSchema as LinkVerifiedWalletReq,
+  type LinkVerifiedWalletReq as LinkVerifiedWalletReqShape,
+} from "@freeside-auth/protocol/api"
 
-const NOT_IMPL_T4_1 = { error: "not_implemented", task: "T4.1", bead: "arrakis-hyde" } as const
+/**
+ * Resolve the service token at request time so tests that set the env
+ * variable after module load still work. Production sets it once at boot.
+ */
+function getServiceToken(): string | null {
+  const v = process.env.LINK_SERVICE_TOKEN
+  return v && v.length > 0 ? v : null
+}
+
+/**
+ * Constant-time service-token comparison. Plain `!==` short-circuits on
+ * the first differing byte, leaking the configured prefix via timing on a
+ * shared-secret auth boundary. Hashing both values to fixed-size SHA-256
+ * digests + comparing via `timingSafeEqual` neutralizes the leak (FAGAN
+ * iter-1 finding).
+ */
+function serviceTokenMatches(provided: string | null, configured: string): boolean {
+  if (provided === null) return false
+  const a = createHash("sha256").update(provided, "utf8").digest()
+  const b = createHash("sha256").update(configured, "utf8").digest()
+  return timingSafeEqual(a, b)
+}
 
 export const linkVerifiedWallet = route
   .post("/v1/link/verified-wallet")
@@ -29,4 +61,48 @@ export const linkVerifiedWallet = route
         "Accepts the cycle-c redirected linkage write. Applies D8 / FR-L3 conflict policy server-side: latest-wins single-axis updates; hard-fail on cross_user_collision. Per FR-C1.",
     },
   })
-  .handle(() => jsonResponse(501, NOT_IMPL_T4_1))
+  .handle(async (c) => {
+    // Service-to-service auth gate — fail closed if no token is configured.
+    // Failing closed in prod is the safer posture (a missing token shouldn't
+    // leak as "anyone can write"); fail-closed in dev catches forgetfulness.
+    const configured = getServiceToken()
+    if (configured === null) {
+      return jsonResponse(503, {
+        code: "service_unconfigured",
+        message: "LINK_SERVICE_TOKEN is not set; refusing service-to-service writes",
+      })
+    }
+    const provided = (
+      c as unknown as { req: Request }
+    ).req.headers.get("x-service-token")
+    if (!serviceTokenMatches(provided, configured)) {
+      return jsonResponse(401, {
+        code: "unauthorized",
+        message: "missing or invalid X-Service-Token",
+      })
+    }
+
+    const body = (c as unknown as { body: LinkVerifiedWalletReqShape }).body
+    try {
+      const result = await linkVerifiedWalletOrchestrator(getSpine(), body, {
+        actor: "sietch-redirect",
+      })
+      return jsonResponse(200, {
+        ok: true,
+        user_id: result.userId,
+        wallet_address: result.walletAddress,
+        idempotent: result.idempotent,
+        conflict_resolved: result.conflictResolved,
+      })
+    } catch (err) {
+      if (err instanceof LinkCrossUserCollisionError) {
+        return jsonResponse(409, {
+          ok: false,
+          conflict: "cross_user_collision",
+          message: err.message,
+        })
+      }
+      throw err // unknown failure → 5xx via global error handler
+    }
+  })
+
