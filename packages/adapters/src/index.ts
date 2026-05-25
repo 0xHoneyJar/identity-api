@@ -73,3 +73,18 @@ export {
   addressesEqual,
   type SignatureScheme,
 } from './wallet-signature';
+
+// Credential bridge interface (T1.7 · FR-A4 · D3-reframed credential swap)
+// Per-scheme verify abstraction with live-path quarantine flag for Dynamic.
+// Bridges: SIWE (live), EIP-191 (live), Dynamic (BACKFILL ONLY — no SDK).
+export type {
+  CredentialBridge,
+  CredentialBridgeRegistry,
+  CredentialScheme,
+  VerifyInput,
+  VerifyResult,
+  VerifyRejectionReason,
+  BridgedLinkedAccount,
+  WalletSignatureVerifyInput,
+  DynamicBackfillVerifyInput,
+} from './credential-bridge';
