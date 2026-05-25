@@ -1,14 +1,14 @@
 /**
  * src/auth.ts — central auth/session/csrf re-export.
  *
- * Defuses two landmines identified in the T1.0 spike verdict
+ * Defuses three landmines identified in the T1.0 spike verdict
  * (`grimoires/loa/spikes/t1.0-hyper-verdict.md`):
  *
  *   L4: `.auth()` is added to `RouteBuilder.prototype` at plugin-construction
  *       time by `authJwtPlugin`. Module-eval `route.X().auth()` definitions
  *       race plugin boot and 500 with "route.X(...).auth is not a function".
  *       FIX: install the .auth() method eagerly at module load via
- *       `installAuthMethod(authJwt(config))` — BEFORE any route file imports
+ *       `installAuthMethod(hardenedAuthMw)` — BEFORE any route file imports
  *       `route` from here and chains `.auth()`.
  *
  *   L5: `csrfGuard()` only issues the csrf cookie on responses from routes
@@ -18,10 +18,21 @@
  *       FIX: a `withSession()` helper that bundles `session({...}) + csrfGuard()`.
  *       Always call `.use(...withSession())` — never one without the other.
  *
+ *   L7: malformed bearer JWT (token that isn't base64-decodable as JSON) →
+ *       500 `JSON Parse error`, not the expected 401. `auth-jwt/jwt.ts`'s
+ *       `verifyJwt` calls `JSON.parse(b64urlToUtf8(h))` for the header +
+ *       payload — a non-JSON garbage payload throws `SyntaxError`, which
+ *       leaks past the middleware's `catch (e) { if (e instanceof JwtError)`
+ *       narrow-catch.
+ *       FIX (T1.6 LBR-3 / path I): wrap the installed auth middleware here
+ *       so SyntaxError / TypeError are caught and converted to 401, KEEPING
+ *       vendored Hyper pristine (no hyper.lock.json drift). The upstream
+ *       in-vendored-source patch is Sprint-1.1 follow-up #6.
+ *
  * Discipline: every file in `src/api/` that needs auth/session imports
  * `route, withSession` from THIS file, NOT from `@hyper/*` directly. This
- * makes the L4/L5 pairing enforceable by code review (a `.auth()` chain that
- * imported `route` from `@hyper/core` directly is grep-detectable).
+ * makes the L4/L5/L7 pairing enforceable by code review (a `.auth()` chain
+ * that imported `route` from `@hyper/core` directly is grep-detectable).
  *
  * Sprint-1.1 follow-up #3 — ES256 swap: this module currently uses HS256
  * per the T1.0 spike. SDD FR-J2 specifies ES256 (D7). Either (a) verify
@@ -31,7 +42,7 @@
  */
 
 import { route, type Middleware } from "@hyper/core"
-import { authJwt, installAuthMethod } from "@hyper/auth-jwt"
+import { authJwt, installAuthMethod, JwtError } from "@hyper/auth-jwt"
 import { csrfGuard, memorySessions, session, type SessionStore } from "@hyper/session"
 
 // ---------------------------------------------------------------------------
@@ -70,17 +81,102 @@ export const SESSION_SECRET = loadSecret("SESSION_SECRET")
 // L4 fix: install .auth() on RouteBuilder.prototype BEFORE any route file
 // chains it. Anything that imports `route` from this module is now safe to
 // call `.auth()` because the runtime patch has already been applied.
+//
+// L7 fix (T1.6 LBR-3): hardenAuthMiddleware wraps the vendored authJwt
+// middleware to catch SyntaxError / TypeError (and any other non-JwtError
+// crypto-adjacent throw) and convert to 401 instead of letting them surface
+// as a 500. The hardened middleware is what gets installed onto the
+// RouteBuilder prototype; every `.auth()` chain transitively uses the wrap.
+//
+// We DON'T patch src/hyper/auth-jwt/jwt.ts directly (path-II option in the
+// brief) — keeps hyper.lock.json pristine. Sprint-1.1 follow-up #6 will land
+// the upstream patch + remove this wrap.
 // ---------------------------------------------------------------------------
 const jwtMw = authJwt({
   secret: JWT_SECRET,
   algorithms: ["HS256"], // TODO(sprint-1.1-3): swap to ["ES256"] — see header comment
 })
-installAuthMethod(jwtMw)
+const hardenedJwtMw = hardenAuthMiddleware(jwtMw)
+installAuthMethod(hardenedJwtMw)
 
 // Re-export `route` so consumers import it from here (not from @hyper/core).
 // The import-order discipline is: any module that imports `route` MUST get
 // it from `./auth` — making the L4 fix transitively guaranteed.
 export { route }
+
+// ---------------------------------------------------------------------------
+// hardenAuthMiddleware — L7 / LBR-3 wrap.
+//
+// The vendored authJwt middleware's structure is:
+//   async ({ ctx, req, next }) => {
+//     const token = extract(req)
+//     if (!token) return unauthorized('missing_token')
+//     try {
+//       const { payload } = await verifyJwt(token, config)
+//       // … populate ctx.user / ctx.jwt
+//       return next()
+//     } catch (e) {
+//       if (e instanceof JwtError) return unauthorized(e.code)
+//       throw e   // ← THIS leaks SyntaxError/TypeError as 500
+//     }
+//   }
+//
+// The narrow-catch on `JwtError` is the issue. `verifyJwt` calls
+// `JSON.parse(b64urlToUtf8(headerSegment))` and `JSON.parse(b64urlToUtf8(
+// payloadSegment))` without wrapping — a non-JSON-decodable garbage segment
+// throws a vanilla `SyntaxError` that bypasses the catch. Hyper's outer
+// pipeline turns the rethrow into 500.
+//
+// We wrap: anything thrown that's NOT a JwtError AND looks like attacker-
+// controlled-input parse failure (SyntaxError, TypeError) becomes 401. We
+// LET genuine application errors (Error subclasses outside the parse-error
+// class, async exceptions from downstream middleware) propagate as 5xx.
+//
+// Discrimination criteria:
+//   - SyntaxError (covers `JSON.parse` failures including from b64urlToUtf8
+//     producing invalid UTF-8 → atob throws SyntaxError too)
+//   - TypeError (covers `s.split('.')` returning unexpected shapes / similar
+//     coercion failures from a token that isn't a 3-segment string)
+// Everything else: rethrow.
+//
+// Response shape mirrors the underlying middleware's 401 shape so consumers
+// see consistent error envelopes regardless of failure class.
+// ---------------------------------------------------------------------------
+function hardenAuthMiddleware(inner: Middleware): Middleware {
+  return async (args) => {
+    try {
+      return await inner(args)
+    } catch (e) {
+      if (e instanceof JwtError) {
+        // The inner middleware should already convert JwtError → 401, but
+        // defense-in-depth: if a JwtError escapes the inner catch (e.g.,
+        // upstream code-path change leaves a path uncovered), we still
+        // return 401 rather than 500.
+        return unauthorized401("invalid_token")
+      }
+      if (e instanceof SyntaxError || e instanceof TypeError) {
+        // The L7 leak path: malformed base64 / non-JSON token payload.
+        // 401 is the right code (the caller's token is bad), NOT 500.
+        return unauthorized401("malformed_token")
+      }
+      // Genuine downstream error — let it propagate; Hyper's outer error
+      // pipeline will render the appropriate 5xx with request_id.
+      throw e
+    }
+  }
+}
+
+/** 401 envelope matching the vendored auth-jwt middleware's shape. */
+function unauthorized401(code: string): Response {
+  return new Response(JSON.stringify({ error: "unauthorized", code }), {
+    status: 401,
+    headers: {
+      "content-type": "application/json",
+      // Mirror the vendored hyper auth-jwt header for consistency.
+      "www-authenticate": 'Bearer realm="hyper", error="invalid_token"',
+    },
+  })
+}
 
 // ---------------------------------------------------------------------------
 // L5 fix: `withSession()` bundles `session(...)` + `csrfGuard()` so they're

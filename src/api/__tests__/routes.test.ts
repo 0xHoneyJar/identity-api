@@ -328,4 +328,51 @@ describe("GET /v1/me (FR-A3)", () => {
     })
     expect(res.status).toBe(404)
   })
+
+  // T1.6 LBR-3 — L7 regression. Verdict reproduction: a malformed bearer
+  // token with 3 segments but garbage payloads used to 500 because
+  // SyntaxError from JSON.parse leaked past the vendored auth-jwt middleware's
+  // narrow `catch (e) { if (e instanceof JwtError) }`. The src/auth.ts wrap
+  // converts SyntaxError/TypeError to 401 (without touching vendored Hyper).
+  it("401 on single-string bearer token (NOT 500) — hits the 3-segment guard, JwtError-class", async () => {
+    // A single-string token (no dots) hits verifyJwt's first guard
+    // `if (parts.length !== 3) throw new JwtError("invalid_token", ...)`,
+    // which the inner middleware classifies as 401 'invalid_token'. This
+    // exercises the inner JwtError path; the SyntaxError-leak path is the
+    // 3-segment-with-garbage test below.
+    const res = await fetch(`${baseUrl}/v1/me`, {
+      headers: { authorization: "Bearer total-garbage-not-a-jwt" },
+    })
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as { error: string; code: string }
+    expect(body.error).toBe("unauthorized")
+    expect(body.code).toBe("invalid_token")
+  })
+
+  it("401 (NOT 500) on 3-segment bearer with garbage payloads (L7 / LBR-3 — the actual SyntaxError leak)", async () => {
+    // `aaa.bbb.ccc` has 3 segments → passes verifyJwt's parts-count guard
+    // → b64urlToUtf8(a) is decodable but yields non-JSON text → JSON.parse
+    // throws SyntaxError → leaks past `catch (e) { if (e instanceof JwtError) }`
+    // → 500 BASELINE. The src/auth.ts hardenAuthMiddleware wrap catches the
+    // SyntaxError and returns 401 'malformed_token' INSTEAD.
+    const res = await fetch(`${baseUrl}/v1/me`, {
+      headers: { authorization: "Bearer aaa.bbb.ccc" },
+    })
+    expect(res.status).toBe(401) // ← THE LOAD-BEARING ASSERTION
+    const body = (await res.json()) as { error: string; code: string }
+    expect(body.error).toBe("unauthorized")
+    expect(body.code).toBe("malformed_token")
+  })
+
+  it("401 (NOT 500) on 3-segment bearer that base64-decodes to non-JSON (L7 sibling)", async () => {
+    // Three base64-decodable segments → JSON.parse throws SyntaxError on
+    // "hello" / "world" as non-JSON text. Same leak class as the previous test.
+    const res = await fetch(`${baseUrl}/v1/me`, {
+      headers: { authorization: "Bearer aGVsbG8.d29ybGQ.YWFh" },
+    })
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as { error: string; code: string }
+    expect(body.error).toBe("unauthorized")
+    expect(body.code).toBe("malformed_token")
+  })
 })
