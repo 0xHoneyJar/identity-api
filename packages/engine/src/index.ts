@@ -50,3 +50,18 @@ export {
   type MintResult,
   type MintOrchestratorConfig,
 } from './mint-jwt-orchestrator';
+
+// Spine resolvers + write orchestrators (T1.5 · the central SoR engine seam)
+export {
+  resolveByWallet,
+  resolveByAccount,
+  resolveByNym,
+  getIdentity,
+  mintUser,
+  linkWalletWithAudit,
+  linkAccountWithAudit,
+  claimNymWithAudit,
+  setPrimaryWithAudit,
+  resolveOrMintByWallet,
+  type AuditActor,
+} from './resolve-spine';

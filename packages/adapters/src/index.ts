@@ -24,15 +24,23 @@ export {
 } from './postgres-split-adapter';
 
 // Spine SoR adapter (T1.5 · the central identity-api write surface)
+// Implements SpinePort from @freeside-auth/ports; the port types are
+// re-exported here too for ergonomic single-import consumption.
 export {
   PostgresSpineAdapter,
   SpineConflictError,
   type SpineConflictKind,
   type SpineSqlLike,
+  // Port types (re-exported through the adapter for caller convenience)
+  type SpinePort,
+  type SpineLinkedAccountProvider,
+  type SpineWallet,
+  type SpineLinkedAccount,
+  type SpineWorldIdentity,
+  type SpineIdentityShape,
+  type SpineAuditEvent,
+  // Legacy aliases retained for ergonomic in-package naming
   type SpineIdentity,
-  type SpineWalletRow,
-  type SpineLinkedAccountRow,
-  type SpineWorldIdentityRow,
   type SpineAuditEventInput,
   type LinkedAccountProvider,
 } from './postgres-spine-adapter';

@@ -28,3 +28,14 @@ export {
   type VerifyError,
   type RevocationLayer,
 } from './jwt-verifier.port';
+
+// Spine SoR port (T1.5 · central identity-api spine; the writer of FR-R6)
+export {
+  type SpinePort,
+  type SpineLinkedAccountProvider,
+  type SpineWallet,
+  type SpineLinkedAccount,
+  type SpineWorldIdentity,
+  type SpineIdentityShape,
+  type SpineAuditEvent,
+} from './spine.port';

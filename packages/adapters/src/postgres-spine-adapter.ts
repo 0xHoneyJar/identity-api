@@ -40,57 +40,31 @@
  */
 
 import { SQL } from "bun"
+import type {
+  SpinePort,
+  SpineLinkedAccountProvider,
+  SpineIdentityShape,
+  SpineAuditEvent,
+} from "@freeside-auth/ports"
 
-// ─── types ──────────────────────────────────────────────────────────────────
+// Re-export the port types under the adapter package for ergonomic
+// consumption — callers that import the adapter often want the shapes too.
+export type {
+  SpinePort,
+  SpineLinkedAccountProvider,
+  SpineWallet,
+  SpineLinkedAccount,
+  SpineWorldIdentity,
+  SpineIdentityShape,
+  SpineAuditEvent,
+} from "@freeside-auth/ports"
 
-/** Provider enum, mirrors the CHECK constraint on linked_accounts.provider. */
-export type LinkedAccountProvider = "discord" | "telegram" | "dynamic_user_id"
-
-/** Wallet row as the spine sees it. */
-export interface SpineWalletRow {
-  readonly wallet_address: string
-  readonly chain_ids: readonly string[]
-  readonly is_primary: boolean
-  readonly verified_at: string
-  readonly unlinked_at: string | null
-}
-
-/** Linked-account row as the spine sees it. */
-export interface SpineLinkedAccountRow {
-  readonly provider: LinkedAccountProvider
-  readonly external_id: string
-  readonly verified_at: string
-  readonly unlinked_at: string | null
-}
-
-/** World-identity row as the spine sees it. */
-export interface SpineWorldIdentityRow {
-  readonly world_slug: string
-  readonly nym: string
-  readonly joined_at: string
-}
-
-/**
- * Composite identity returned from `getIdentity` — assembled from
- * wallets[], linked_accounts[], world_identity[] for one user.
- */
-export interface SpineIdentity {
-  readonly user_id: string
-  readonly primary_wallet: string | null
-  readonly created_at: string
-  readonly updated_at: string
-  readonly wallets: readonly SpineWalletRow[]
-  readonly linked_accounts: readonly SpineLinkedAccountRow[]
-  readonly world_identities: readonly SpineWorldIdentityRow[]
-}
-
-/** Audit event payload — kept open for write callers; spine just stores JSONB. */
-export interface SpineAuditEventInput {
-  readonly event_type: string
-  readonly user_id?: string | null
-  readonly actor?: string | null
-  readonly payload: Record<string, unknown>
-}
+// Legacy aliases retained for ergonomic local naming inside the adapter
+// implementation (and for any T1.5+ callers that imported these names from
+// an earlier draft of the adapter — kept as type-only aliases).
+export type LinkedAccountProvider = SpineLinkedAccountProvider
+export type SpineIdentity = SpineIdentityShape
+export type SpineAuditEventInput = SpineAuditEvent
 
 // ─── errors ─────────────────────────────────────────────────────────────────
 
@@ -146,7 +120,7 @@ export interface SpineSqlLike {
  * `Bun.SQL` pools connections); pass into the engine resolvers + route
  * handlers as a shared singleton.
  */
-export class PostgresSpineAdapter {
+export class PostgresSpineAdapter implements SpinePort {
   readonly sql: SpineSqlLike
 
   /**
@@ -201,7 +175,7 @@ export class PostgresSpineAdapter {
    * write path; revisit if/when an account-unlink endpoint lands.
    */
   async resolveByAccount(
-    provider: LinkedAccountProvider,
+    provider: SpineLinkedAccountProvider,
     externalId: string,
   ): Promise<string | null> {
     const sql = this.sql
@@ -247,7 +221,7 @@ export class PostgresSpineAdapter {
    *
    * Returns `null` if the user_id isn't in the users table.
    */
-  async getIdentity(userId: string): Promise<SpineIdentity | null> {
+  async getIdentity(userId: string): Promise<SpineIdentityShape | null> {
     const sql = this.sql
     const userRows = (await sql`
       SELECT user_id, primary_wallet, created_at, updated_at
@@ -280,7 +254,7 @@ export class PostgresSpineAdapter {
        WHERE user_id = ${userId}
        ORDER BY verified_at ASC
     `) as Array<{
-      provider: LinkedAccountProvider
+      provider: SpineLinkedAccountProvider
       external_id: string
       verified_at: string
       unlinked_at: string | null
@@ -391,7 +365,7 @@ export class PostgresSpineAdapter {
    */
   async linkAccount(opts: {
     userId: string
-    provider: LinkedAccountProvider
+    provider: SpineLinkedAccountProvider
     externalId: string
   }): Promise<void> {
     const sql = this.sql
@@ -520,7 +494,7 @@ export class PostgresSpineAdapter {
    * populate it with the session subject; T4.1 link-verified-wallet uses
    * 'sietch-redirect'.
    */
-  async writeAuditEvent(input: SpineAuditEventInput): Promise<void> {
+  async writeAuditEvent(input: SpineAuditEvent): Promise<void> {
     const sql = this.sql
     const actor = input.actor ?? "system"
     const userId = input.user_id ?? null
