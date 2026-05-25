@@ -52,6 +52,7 @@ export {
 } from './mint-jwt-orchestrator';
 
 // Spine resolvers + write orchestrators (T1.5 · the central SoR engine seam)
+// T1.6: + WalletLinkRaceError for the LBR-1 transactional retry signal.
 export {
   resolveByWallet,
   resolveByAccount,
@@ -63,6 +64,7 @@ export {
   claimNymWithAudit,
   setPrimaryWithAudit,
   resolveOrMintByWallet,
+  WalletLinkRaceError,
   type AuditActor,
 } from './resolve-spine';
 
