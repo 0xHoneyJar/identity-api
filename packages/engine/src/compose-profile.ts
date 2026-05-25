@@ -143,7 +143,7 @@ const DEFAULT_SCORE_TIMEOUT_MS = 300
 const DEFAULT_CODEX_TIMEOUT_MS = 400
 
 /** Per-source label used in degraded[] strings (e.g., "inventory:timeout"). */
-type SourceLabel = "inventory" | "score" | "codex"
+export type SourceLabel = "inventory" | "score" | "codex"
 
 // ─── the orchestrator ──────────────────────────────────────────────────────
 
@@ -308,7 +308,7 @@ export async function composeProfile(
  * up to the route layer propagate as 5xx (NFR-2 isolates compose
  * downstreams; the spine is the SoR substrate, not a compose downstream).
  */
-async function resolveSpineIdentity(
+export async function resolveSpineIdentity(
   spine: SpinePort,
   input: ComposeProfileInput,
 ): Promise<{ identity: IdentityResp; walletAddress: string }> {
@@ -340,7 +340,7 @@ async function resolveSpineIdentity(
  * Generic over `TData` so the call site can type-narrow the union to the
  * specific port's response type.
  */
-function circuitOpenFailure<TData>(source: SourceLabel): FederationResult<TData> {
+export function circuitOpenFailure<TData>(source: SourceLabel): FederationResult<TData> {
   return {
     ok: false,
     reason: {
@@ -358,7 +358,7 @@ function circuitOpenFailure<TData>(source: SourceLabel): FederationResult<TData>
  * are NOT recorded — they're an internal short-circuit, not a wire-level
  * data point about the upstream's health.
  */
-function recordOutcome(
+export function recordOutcome(
   breaker: CircuitBreaker,
   result: FederationResult<unknown>,
 ): void {
@@ -390,7 +390,7 @@ function recordOutcome(
  * Per the ProfileRespSchema docstring this is the v1 vocabulary; downstream
  * consumers can split-on-colon to recover (source, reason).
  */
-function labelFor(source: SourceLabel, reason: FederationFailureKind): string {
+export function labelFor(source: SourceLabel, reason: FederationFailureKind): string {
   return `${source}:${reason}`
 }
 
@@ -417,7 +417,7 @@ function labelFor(source: SourceLabel, reason: FederationFailureKind): string {
  * Codex coverage of a partial set is still useful (UX layer renders a "more
  * available" indicator if it cares); paginated batch is a T3+ refinement.
  */
-function extractMiberaTokens(
+export function extractMiberaTokens(
   holdings: ReadonlyArray<InventoryContractHolding>,
 ): readonly string[] {
   const tokens: string[] = []

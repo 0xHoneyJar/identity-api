@@ -97,7 +97,26 @@ export {
 // degraded[] populated for any source that missed.
 export {
   composeProfile,
+  // Shared helpers — also imported by composeMiberaDimensions (T3.1) so the
+  // two orchestrators agree on spine resolution + Mibera filter + breaker
+  // discipline + degraded[] label format.
+  resolveSpineIdentity,
+  extractMiberaTokens,
+  circuitOpenFailure,
+  recordOutcome,
+  labelFor,
   type ComposeProfileDeps,
   type ComposeProfileOpts,
   type ComposeProfileInput,
+  type SourceLabel,
 } from './compose-profile';
+
+// Mibera dimensions orchestrator (T3.1 · read-time spine → inventory → codex
+// for /v1/mibera/dimensions). Headline G-6 building block — honey-road
+// renders 7-dim Mibera profiles sourced from this orchestrator, NOT Alchemy.
+export {
+  composeMiberaDimensions,
+  type ComposeMiberaDimensionsDeps,
+  type ComposeMiberaDimensionsOpts,
+  type ComposeMiberaDimensionsInput,
+} from './compose-mibera-dimensions';

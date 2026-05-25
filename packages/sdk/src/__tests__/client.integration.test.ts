@@ -26,6 +26,22 @@ import type {
 import app from "../../../../src/api/index"
 import { JWT_SECRET } from "../../../../src/auth"
 import { __resetSpineForTest, __setSpineForTest } from "../../../../src/api/spine"
+import {
+  __setInventoryForTest,
+  __resetInventoryForTest,
+} from "../../../../src/api/inventory"
+import {
+  __setScoreForTest,
+  __resetScoreForTest,
+} from "../../../../src/api/score"
+import {
+  __setCodexForTest,
+  __resetCodexForTest,
+} from "../../../../src/api/codex"
+import { __resetBreakersForTest } from "../../../../src/api/routes/profile"
+import { MockInventoryPort } from "../../../adapters/src/__tests__/mock-inventory"
+import { MockScorePort } from "../../../adapters/src/__tests__/mock-score"
+import { MockCodexPort } from "../../../adapters/src/__tests__/mock-codex"
 import { createIdentityClient } from "../client"
 import {
   ConflictError,
@@ -161,10 +177,19 @@ const FIXTURE_IDENTITY: SpineIdentityShape = {
 
 let baseUrl: string
 let mockSpine: MockSpine
+let mockInventory: MockInventoryPort
+let mockScore: MockScorePort
+let mockCodex: MockCodexPort
 
 beforeAll(async () => {
   mockSpine = buildMockSpine()
+  mockInventory = new MockInventoryPort()
+  mockScore = new MockScorePort()
+  mockCodex = new MockCodexPort()
   __setSpineForTest(mockSpine)
+  __setInventoryForTest(mockInventory)
+  __setScoreForTest(mockScore)
+  __setCodexForTest(mockCodex)
   app.listen({ port: 0, hostname: "127.0.0.1", banner: false })
   const port = app.server?.port
   if (!port) throw new Error("SDK integration boot: app.server.port unavailable after listen({port:0})")
@@ -174,6 +199,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.stop()
   __resetSpineForTest()
+  __resetInventoryForTest()
+  __resetScoreForTest()
+  __resetCodexForTest()
+  __resetBreakersForTest()
 })
 
 beforeEach(() => {
@@ -183,6 +212,10 @@ beforeEach(() => {
   mockSpine.getIdentityReturns = undefined
   mockSpine.trace.length = 0
   mockSpine.audits.length = 0
+  mockInventory.__reset()
+  mockScore.__reset()
+  mockCodex.__reset()
+  __resetBreakersForTest()
 })
 
 // ─── auth.challenge (FR-A1) ────────────────────────────────────────────────
@@ -373,35 +406,70 @@ describe("client.resolve.byNym (FR-R3)", () => {
   })
 })
 
-// ─── stubs (501 today, typed for tomorrow) ─────────────────────────────────
+// ─── wired routes (T2.3 + tomorrow) ────────────────────────────────────────
 
-describe("client.profile.get (FR-P1, T2.3 stub)", () => {
-  it("throws NotImplementedError(501) until T2.3 lands", async () => {
+describe("client.profile.get (FR-P1, T2.3 wired)", () => {
+  it("returns ProfileResp with identity + degraded[] when federation sources fail", async () => {
+    // Spine resolves identity (the SoR — required). Federation ports
+    // return failures by default (mocks default to not-configured / 404),
+    // so the orchestrator surfaces them in `degraded[]` while still
+    // returning 200 with the identity field present (NFR-2 graceful degrade).
+    mockSpine.getIdentityReturns = FIXTURE_IDENTITY
+    mockInventory.__setFailureForWallet(FIXTURE_IDENTITY.primary_wallet!, {
+      kind: "upstream_5xx",
+      message: "test: inventory upstream down",
+      statusCode: 503,
+    })
+    mockCodex.__setFailureForNextCall({
+      kind: "upstream_5xx",
+      message: "test: codex upstream down",
+      statusCode: 503,
+    })
+
+    const client = createIdentityClient({ baseUrl })
+    const profile = await client.profile.get({ world: "mibera", userId: FIXTURE_USER_ID })
+
+    // Typed return: ProfileResp with identity always present.
+    expect(profile.identity.user_id).toBe(FIXTURE_USER_ID)
+    expect(profile.identity.primary_wallet).toBe(FIXTURE_IDENTITY.primary_wallet)
+    // Inventory failed → no holdings field, inventory entry in degraded[].
+    expect(profile.holdings).toBeUndefined()
+    expect(profile.degraded).toContain("inventory:upstream_5xx")
+    // Score mock defaults to not_found → score field omitted, surfaced in
+    // degraded[] (per labelFor at compose-profile.ts:393). The breaker
+    // treats not_found as healthy (recordOutcome at :374) — the visible-vs-
+    // health-signal distinction.
+    expect(profile.score).toBeUndefined()
+    expect(profile.degraded).toContain("score:not_found")
+  })
+
+  it("throws ValidationError(400) when neither userId nor wallet provided", async () => {
+    // ProfileQuery.userId + .wallet are both optional at the type level —
+    // XOR enforcement happens at runtime in the route handler. This test
+    // exercises that runtime guard.
     const client = createIdentityClient({ baseUrl })
     let err: unknown
     try {
-      await client.profile.get({ world: "mibera", userId: FIXTURE_USER_ID })
+      await client.profile.get({ world: "mibera" })
     } catch (e) {
       err = e
     }
-    expect(err).toBeInstanceOf(NotImplementedError)
-    expect((err as NotImplementedError).status).toBe(501)
-    expect((err as NotImplementedError).envelope).toMatchObject({
-      error: "not_implemented",
-    })
+    expect(err).toBeInstanceOf(ValidationError)
   })
 })
 
-describe("client.mibera.dimensions (FR-M1 / G-6, T3.2 stub)", () => {
-  it("throws NotImplementedError(501) until T3.2 lands", async () => {
+describe("client.mibera.dimensions (FR-M1 / G-6, T3.1 wired)", () => {
+  it("returns typed MiberaDimensionsResp with tokens=[] when wallet has no Mibera", async () => {
+    // Spine resolves cleanly; default inventory mock returns empty holdings
+    // → orchestrator surfaces tokens=[] (no Mibera held).
+    mockSpine.resolveByWalletReturns = FIXTURE_USER_ID
+    mockSpine.getIdentityReturns = FIXTURE_IDENTITY
     const client = createIdentityClient({ baseUrl })
-    let err: unknown
-    try {
-      await client.mibera.dimensions({ wallet: "0xabc0000000000000000000000000000000000001" })
-    } catch (e) {
-      err = e
-    }
-    expect(err).toBeInstanceOf(NotImplementedError)
+    const resp = await client.mibera.dimensions({ wallet: FIXTURE_IDENTITY.primary_wallet! })
+    expect(resp.user_id).toBe(FIXTURE_USER_ID)
+    expect(resp.primary_wallet).toBe(FIXTURE_IDENTITY.primary_wallet!)
+    expect(resp.tokens).toEqual([])
+    expect(resp.degraded).toBeUndefined()
   })
 })
 

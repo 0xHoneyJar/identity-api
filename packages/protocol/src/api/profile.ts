@@ -27,6 +27,7 @@ import { z } from "zod"
 import { IdentityRespSchema, UserIdParamSchema, WalletAddressParamSchema } from "./resolve"
 import {
   CodexGetMiberaBatchRespSchema,
+  CodexMiberaEntrySchema,
   InventoryGetHoldingsRespSchema,
   ScoreGetWalletRespSchema,
 } from "./federation/index"
@@ -77,7 +78,7 @@ export const ProfileRespSchema = z.object({
 })
 export type ProfileResp = z.infer<typeof ProfileRespSchema>
 
-// ─── /v1/mibera/dimensions (FR-M1, G-6, T3.2 route wiring) ──────────────────
+// ─── /v1/mibera/dimensions (FR-M1, G-6, T3.1 sealed by composeMiberaDimensions) ──
 
 export const MiberaDimensionsQuerySchema = z.object({
   userId: UserIdParamSchema.optional(),
@@ -86,16 +87,28 @@ export const MiberaDimensionsQuerySchema = z.object({
 export type MiberaDimensionsQuery = z.infer<typeof MiberaDimensionsQuerySchema>
 
 /**
- * Mibera dimensions response (T3.2 will populate the codex 7-dim shape).
+ * Mibera dimensions response — T3.1 seal.
  *
- * Per FR-M1: per-token 7-dim profile + grail. Until T3.2 lands the
- * response is intentionally `z.unknown()`-bodied so consumers can call
- * the method but get a runtime 501 with the typed error envelope.
+ * `tokens` is `CodexMiberaEntry[]` VERBATIM (per bead arrakis-8qpm
+ * "verbatim no re-derive"). The codex entry shape lives at
+ * `./federation/codex.ts::CodexMiberaEntrySchema` — anything that uses
+ * MiberaDimensionsResp.tokens is reading codex's wire shape directly.
+ *
+ * Three observable states for `tokens`:
+ *   - `tokens: CodexMiberaEntry[]` (possibly empty) — inventory + codex
+ *     reached; wallet's Mibera traits (or `[]` if wallet holds no Mibera).
+ *   - `tokens` OMITTED — either inventory or codex degraded; the relevant
+ *     entry in `degraded[]` explains which side missed.
+ *
+ * `user_id` and `primary_wallet` are non-optional because the spine is
+ * the SoR — failure there propagates as a 5xx, NOT a degraded response.
+ * (The T1.1 stub had both optional; T3.1 tightens after the spine
+ * contract proved itself in T1.5+.)
  */
 export const MiberaDimensionsRespSchema = z.object({
-  user_id: z.string().uuid().optional(),
-  primary_wallet: z.string().optional(),
-  tokens: z.array(z.unknown()).optional(),
+  user_id: z.string().uuid(),
+  primary_wallet: z.string(),
+  tokens: z.array(CodexMiberaEntrySchema).optional(),
   degraded: z.array(z.string()).optional(),
 })
 export type MiberaDimensionsResp = z.infer<typeof MiberaDimensionsRespSchema>
