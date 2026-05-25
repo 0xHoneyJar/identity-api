@@ -92,3 +92,10 @@ export type {
 // Live-path bridges (SIWE + EIP-191) — usableInLivePath: true
 export { siweCredentialBridge } from './credential-bridge-siwe';
 export { eip191CredentialBridge } from './credential-bridge-eip191';
+
+// Backfill bridge (Dynamic) — usableInLivePath: FALSE per FR-A4.
+// Consumed by the T4.4 midi_profiles backfill migration ONLY. The live
+// auth path can never reach it (route handler 401s on the flag check).
+// NO @dynamic-labs/* import anywhere in this file — quarantine enforced
+// by scripts/check-dynamic-quarantine.sh.
+export { dynamicCredentialBridge } from './credential-bridge-dynamic';
