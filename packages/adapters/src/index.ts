@@ -88,3 +88,7 @@ export type {
   WalletSignatureVerifyInput,
   DynamicBackfillVerifyInput,
 } from './credential-bridge';
+
+// Live-path bridges (SIWE + EIP-191) — usableInLivePath: true
+export { siweCredentialBridge } from './credential-bridge-siwe';
+export { eip191CredentialBridge } from './credential-bridge-eip191';
