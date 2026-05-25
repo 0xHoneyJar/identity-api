@@ -62,7 +62,7 @@
         "zod": "^4.4.3",
       },
       "peerDependencies": {
-        "zod": "^3.23.0",
+        "zod": "^3.23.0 || ^4.0.0",
       },
     },
     "packages/ui": {
@@ -159,7 +159,5 @@
     "yaml": ["yaml@2.8.4", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-ml/JPOj9fOQK8RNnWojA67GbZ0ApXAUlN2UQclwv2eVgTgn7O9gg9o7paZWKMp4g0H3nTLtS9LVzhkpOFIKzog=="],
 
     "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
-
-    "@freeside-auth/protocol/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
   }
 }

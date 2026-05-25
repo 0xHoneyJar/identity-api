@@ -10,17 +10,13 @@
  */
 
 import { jsonResponse } from "@hyper/core"
-import { z } from "zod"
 import { route } from "../../auth"
+// T1.10 — request schema hoisted to @freeside-auth/protocol/api so the SDK
+// can expose `client.link.verifiedWallet({ … })` with full input typing
+// today, even though the handler is a 501 stub until T4.1.
+import { LinkVerifiedWalletReqSchema as LinkVerifiedWalletReq } from "@freeside-auth/protocol/api"
 
 const NOT_IMPL_T4_1 = { error: "not_implemented", task: "T4.1", bead: "arrakis-hyde" } as const
-
-const LinkVerifiedWalletReq = z.object({
-  worldSlug: z.string().regex(/^[a-z0-9-]+$/),
-  discordId: z.string().min(1),
-  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  dynamicUserId: z.string().min(1).optional(),
-})
 
 export const linkVerifiedWallet = route
   .post("/v1/link/verified-wallet")

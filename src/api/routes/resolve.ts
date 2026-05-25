@@ -35,22 +35,29 @@ import {
   getIdentity,
 } from "@freeside-auth/engine"
 import type { SpineLinkedAccountProvider } from "@freeside-auth/ports"
+// T1.10 — path-param schemas hoisted to @freeside-auth/protocol/api so the
+// SDK can validate inputs client-side using the same regex/format rules
+// the server enforces. Aliased to underscore-prefixed names below for
+// minimal diff vs the T1.5 names.
+import {
+  WalletAddressParamSchema as _WalletAddressParam,
+  ProviderParamSchema as _ProviderParam,
+  ExternalIdParamSchema as _ExternalIdParam,
+  WorldSlugParamSchema as _WorldSlugParam,
+  NymParamSchema as _NymParam,
+  UserIdParamSchema as _UserIdParam,
+} from "@freeside-auth/protocol/api"
 
-// Zod schemas — runtime-validated in each handler, documented for OpenAPI.
-export const _WalletAddressParam = z
-  .string()
-  .regex(/^0x[a-fA-F0-9]{40}$/, "0x-prefixed 20-byte hex")
-export const _ProviderParam = z.enum(["discord", "telegram", "dynamic_user_id"])
-export const _ExternalIdParam = z.string().min(1)
-export const _WorldSlugParam = z
-  .string()
-  .regex(/^[a-z0-9-]+$/, "lowercase, digits, hyphen only")
-export const _NymParam = z
-  .string()
-  .regex(/^[a-zA-Z0-9_]+$/, "alphanum + underscore")
-  .min(3)
-  .max(20)
-export const _UserIdParam = z.string().uuid()
+// Re-export the schemas under their original names so any downstream
+// imports (test files, future docs gen) continue to work unchanged.
+export {
+  _WalletAddressParam,
+  _ProviderParam,
+  _ExternalIdParam,
+  _WorldSlugParam,
+  _NymParam,
+  _UserIdParam,
+}
 
 // Generic param-handle: validate via Zod, return a Response on failure.
 function parseParam<T>(

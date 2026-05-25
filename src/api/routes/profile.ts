@@ -10,8 +10,14 @@
  */
 
 import { jsonResponse } from "@hyper/core"
-import { z } from "zod"
 import { route } from "../../auth"
+// T1.10 — query schemas hoisted to @freeside-auth/protocol/api so the SDK
+// can expose typed query-param surfaces today, even though the routes
+// themselves are 501 stubs until T2.3 / T3.2.
+import {
+  ProfileQuerySchema as ProfileQuery,
+  MiberaDimensionsQuerySchema as MiberaDimensionsQuery,
+} from "@freeside-auth/protocol/api"
 
 const NOT_IMPL_T2_3 = { error: "not_implemented", task: "T2.3", bead: "arrakis-eqxj" } as const
 const NOT_IMPL_T3_2 = { error: "not_implemented", task: "T3.2", bead: "arrakis-g407" } as const
@@ -25,11 +31,6 @@ const NOT_IMPL_T3_2 = { error: "not_implemented", task: "T3.2", bead: "arrakis-g
 // canonical shape; the runtime ignores it for GET. Future: when Hyper ships
 // `.query(Schema)`, swap in.
 // ---------------------------------------------------------------------------
-const ProfileQuery = z.object({
-  world: z.string().min(1),
-  userId: z.string().uuid().optional(),
-  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-})
 
 export const getProfile = route
   .get("/v1/profile")
@@ -47,11 +48,6 @@ export const getProfile = route
 // ---------------------------------------------------------------------------
 // GET /v1/mibera/dimensions (FR-M1, headline G-6 — honey-road slice)
 // ---------------------------------------------------------------------------
-const MiberaDimensionsQuery = z.object({
-  userId: z.string().uuid().optional(),
-  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-})
-
 export const getMiberaDimensions = route
   .get("/v1/mibera/dimensions")
   .body(MiberaDimensionsQuery)

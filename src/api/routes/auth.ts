@@ -55,7 +55,7 @@
  */
 
 import { jsonResponse } from "@hyper/core"
-import { z } from "zod"
+import type { z } from "zod"
 import { applyWithSession, route } from "../../auth"
 import { getSpine } from "../spine"
 import {
@@ -79,25 +79,21 @@ import {
   dynamicCredentialBridge,
 } from "@freeside-auth/adapters"
 import { mintSessionJwt } from "../../jwt-mint"
+// T1.10 — shared request schemas. Sourcing from @freeside-auth/protocol/api
+// instead of inlining gives the SDK (packages/sdk) full client-side typing
+// from the SAME Zod object the server validates against. Single SoT.
+import {
+  ChallengeReqSchema as ChallengeReq,
+  VerifyReqSchema as VerifyReq,
+} from "@freeside-auth/protocol/api"
 
 // ---------------------------------------------------------------------------
 // POST /v1/auth/challenge (FR-A1) — issue SIWE/EIP-191 nonce
 // ---------------------------------------------------------------------------
 
-/**
- * Challenge request body. For SIWE the caller MAY supply EIP-4361 fields
- * (domain, uri, chain_id, statement) — defaults are sensible. For EIP-191
- * those fields are ignored.
- */
-const ChallengeReq = z.object({
-  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "must be a 0x-prefixed 20-byte hex"),
-  scheme: z.enum(["siwe", "eip191"]).default("siwe"),
-  // SIWE EIP-4361 surface (optional; defaults applied below)
-  domain: z.string().min(1).max(256).optional(),
-  uri: z.string().url().optional(),
-  chainId: z.number().int().positive().optional(),
-  statement: z.string().min(1).max(512).optional(),
-})
+// Challenge request body: imported from @freeside-auth/protocol/api
+// (`ChallengeReqSchema`, aliased to ChallengeReq above for minimal diff
+// vs the T1.6 inline shape — same Zod object, just hoisted).
 
 const DEFAULT_SIWE_DOMAIN = "identity-api.local"
 const DEFAULT_SIWE_URI = "https://identity-api.local"
@@ -164,17 +160,10 @@ export const authChallenge = route
 // POST /v1/auth/verify (FR-A2) — verify signature, mint JWT + session
 // ---------------------------------------------------------------------------
 
-const VerifyReq = z.object({
-  nonce: z.string().min(1).max(128),
-  signature: z.string().regex(/^0x[a-fA-F0-9]+$/, "must be a 0x-prefixed hex signature"),
-  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  // The Zod enum only admits the two live-path schemes — `dynamic_user_id` is
-  // structurally inaccessible from the request body (FR-A4 enforced at the
-  // Zod boundary). The bridge-dispatch live-path check below is
-  // defense-in-depth against a future scheme addition that forgets to
-  // re-audit Zod first.
-  scheme: z.enum(["siwe", "eip191"]).default("siwe"),
-})
+// Verify request body: imported from @freeside-auth/protocol/api
+// (`VerifyReqSchema`, aliased to VerifyReq above). Same Zod object,
+// hoisted to share with the SDK; the FR-A4 quarantine (no dynamic_user_id
+// in the enum) is preserved verbatim there.
 
 /**
  * Credential bridge registry — the T1.7 dispatch table.

@@ -17,6 +17,8 @@
     "types": ["@types/bun"],
     "paths": {
       "@hyper/*": ["./src/hyper/*", "./src/hyper/*/index.ts"],
+      "@freeside-auth/protocol/api": ["./packages/protocol/src/api/index.ts"],
+      "@freeside-auth/protocol/api/*": ["./packages/protocol/src/api/*.ts"],
       "@freeside-auth/*": ["./packages/*/src"]
     }
   },
