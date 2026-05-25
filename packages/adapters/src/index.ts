@@ -63,3 +63,13 @@ export {
   HttpJWTSigner,
   type HttpJWTSignerConfig,
 } from './http-jwt-signer';
+
+// Wallet signature verifier (T1.6 · FR-A2 EIP-191 + SIWE recovery)
+// viem-backed `recoverMessageAddress` wrapped with strict-format guard +
+// catch-all to keep 500s off the auth surface (LBR-3 / verdict-L7 posture).
+export {
+  verifySignature,
+  isValidSignatureFormat,
+  addressesEqual,
+  type SignatureScheme,
+} from './wallet-signature';
