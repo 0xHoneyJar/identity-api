@@ -26,6 +26,7 @@ export {
 // Spine SoR adapter (T1.5 · the central identity-api write surface)
 // Implements SpinePort from @freeside-auth/ports; the port types are
 // re-exported here too for ergonomic single-import consumption.
+// T1.4 extends with auth_nonces mint/consume (FR-A1).
 export {
   PostgresSpineAdapter,
   SpineConflictError,
@@ -39,6 +40,12 @@ export {
   type SpineWorldIdentity,
   type SpineIdentityShape,
   type SpineAuditEvent,
+  // T1.4 nonce types
+  type SpineNonceScheme,
+  type MintNonceInput,
+  type MintNonceResult,
+  type ConsumeNonceInput,
+  type ConsumeNonceResult,
   // Legacy aliases retained for ergonomic in-package naming
   type SpineIdentity,
   type SpineAuditEventInput,

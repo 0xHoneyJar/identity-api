@@ -40,11 +40,16 @@
  */
 
 import { SQL } from "bun"
+import { randomBytes } from "node:crypto"
 import type {
   SpinePort,
   SpineLinkedAccountProvider,
   SpineIdentityShape,
   SpineAuditEvent,
+  MintNonceInput,
+  MintNonceResult,
+  ConsumeNonceInput,
+  ConsumeNonceResult,
 } from "@freeside-auth/ports"
 
 // Re-export the port types under the adapter package for ergonomic
@@ -57,6 +62,12 @@ export type {
   SpineWorldIdentity,
   SpineIdentityShape,
   SpineAuditEvent,
+  // T1.4 nonce types — re-exported for ergonomic single-import consumption
+  SpineNonceScheme,
+  MintNonceInput,
+  MintNonceResult,
+  ConsumeNonceInput,
+  ConsumeNonceResult,
 } from "@freeside-auth/ports"
 
 // Legacy aliases retained for ergonomic local naming inside the adapter
@@ -65,6 +76,28 @@ export type {
 export type LinkedAccountProvider = SpineLinkedAccountProvider
 export type SpineIdentity = SpineIdentityShape
 export type SpineAuditEventInput = SpineAuditEvent
+
+// ─── constants ──────────────────────────────────────────────────────────────
+
+/**
+ * Default nonce TTL — 300 seconds (5 minutes). Matches the Sietch reference
+ * (`DEFAULT_CHALLENGE_EXPIRATION_SECONDS=300` in
+ * `packages/adapters/security/wallet-verification.ts`, SDD §2.2 + §3.2 default
+ * on `auth_nonces.expires_at`).
+ *
+ * Caller can override via `mintNonce({ ttlSec })`. A `ttlSec=0` (or negative)
+ * inserts a row that is already expired — used in tests to exercise the
+ * `expired` rejection path without a real-time wait.
+ */
+const DEFAULT_NONCE_TTL_SECONDS = 300
+
+/**
+ * Nonce length — 32 bytes from a CSPRNG. Matches NFR-4 (the JWT-signing-key
+ * 32-byte minimum and the Sietch `NONCE_BYTES=32` constant). 32 bytes ≈ 256
+ * bits of entropy — well beyond the birthday-bound risk for UNIQUE-constraint
+ * collisions over the lifetime of this table.
+ */
+const NONCE_BYTES = 32
 
 // ─── errors ─────────────────────────────────────────────────────────────────
 
@@ -517,6 +550,137 @@ export class PostgresSpineAdapter implements SpinePort {
       INSERT INTO audit_events (event_type, user_id, actor, payload)
       VALUES (${input.event_type}, ${userId}, ${actor}, ${input.payload})
     `
+  }
+
+  // ── auth_nonces lifecycle (T1.4 · FR-A1) ─────────────────────────────────
+
+  /**
+   * Mint a fresh nonce row (FR-A1 challenge step).
+   *
+   * Crypto discipline (HARD): the nonce MUST come from a CSPRNG. We use
+   * `crypto.randomBytes(NONCE_BYTES)` from `node:crypto` (Bun re-exports the
+   * node:crypto module → ultimately backed by OpenSSL's secure RNG). Encoding
+   * is base64url (43-char URL-safe, no padding) — fits cleanly in query
+   * strings, cookies, and JSON without escaping.
+   *
+   * Notes:
+   *   - We do NOT compare nonces in app code with `==` / `===`; lookup is
+   *     done at the DB layer with an indexed `WHERE nonce = $1` on a B-tree
+   *     UNIQUE index, which is constant-time per-row at the storage layer.
+   *     No `crypto.timingSafeEqual` ceremony is needed in the in-process
+   *     code path (nor would it help — the DB lookup is the timing surface).
+   *   - `ttlSec=0` is intentionally permitted (inserts an already-expired row
+   *     for test fixtures); negative TTL is clamped to 0 so the SQL is well-
+   *     formed.
+   *   - Collision on the UNIQUE `nonce` index would raise `23505`. With
+   *     32-byte entropy that collision is cryptographically negligible —
+   *     we surface the PG error rather than retry, matching the rest of the
+   *     adapter's posture (let unexpected failures hit the 500 path).
+   */
+  async mintNonce(input: MintNonceInput): Promise<MintNonceResult> {
+    const sql = this.sql
+    const ttlSec = input.ttlSec ?? DEFAULT_NONCE_TTL_SECONDS
+    const safeTtl = ttlSec < 0 ? 0 : ttlSec
+    const nonce = randomBytes(NONCE_BYTES).toString("base64url")
+    const walletAddress = input.walletAddress ?? null
+    const rows = (await sql`
+      INSERT INTO auth_nonces (nonce, wallet_address, scheme, message, expires_at)
+      VALUES (
+        ${nonce},
+        ${walletAddress},
+        ${input.scheme},
+        ${input.message},
+        NOW() + (${safeTtl}::int * INTERVAL '1 second')
+      )
+      RETURNING expires_at
+    `) as Array<{ expires_at: string | Date }>
+    const expiresAtRaw = rows[0]?.expires_at
+    if (!expiresAtRaw) {
+      throw new Error("PostgresSpineAdapter.mintNonce: INSERT returned no row")
+    }
+    // Bun.SQL returns TIMESTAMPTZ as either a Date or an ISO string depending
+    // on driver version; normalize to ISO 8601 for the port contract.
+    const expiresAt =
+      expiresAtRaw instanceof Date
+        ? expiresAtRaw.toISOString()
+        : new Date(expiresAtRaw).toISOString()
+    return { nonce, expires_at: expiresAt }
+  }
+
+  /**
+   * Atomically consume a nonce (FR-A1 verify step 1 + 3, fused).
+   *
+   * The race-safety contract here is load-bearing for FR-A1's single-use
+   * promise (SDD §5.2 step 3). Two concurrent verify calls for the same
+   * nonce MUST result in exactly one success.
+   *
+   * The implementation is a single `UPDATE ... RETURNING` conditioned on
+   * `used_at IS NULL`, `expires_at > NOW()`, AND `scheme = $`. PG holds a
+   * row-level lock for the duration of the UPDATE; the second concurrent
+   * UPDATE sees the now-non-null `used_at` and returns 0 rows. There is no
+   * read-then-write TOCTOU window in this path — and that is non-negotiable.
+   *
+   * If 0 rows return, a follow-up SELECT discriminates the WHY:
+   *   - row absent → `unknown` (typo / cleared / never-existed)
+   *   - row present + used_at NOT NULL → `used`
+   *   - row present + expires_at <= NOW() → `expired`
+   *   - row present + scheme differs → `scheme_mismatch`
+   *
+   * The expired-vs-used ordering: we check `used` first because a row that
+   * was used AND has since expired is most usefully reported as `used` (the
+   * verify side learns "you already verified this" rather than "your
+   * verified-but-old challenge is past TTL"). Tests pin this ordering.
+   *
+   * On success we return the verbatim message + the wallet hint stored at
+   * mint time — the verify-side caller (T1.6) needs both to run
+   * `SignatureVerifier.verifyAddress(message, signature, expected)`.
+   */
+  async consumeNonce(input: ConsumeNonceInput): Promise<ConsumeNonceResult> {
+    const sql = this.sql
+    // Step 1: atomic claim. UPDATE-RETURNING is the only race-safe path.
+    const claimed = (await sql`
+      UPDATE auth_nonces
+         SET used_at = NOW()
+       WHERE nonce = ${input.nonce}
+         AND scheme = ${input.expectedScheme}
+         AND used_at IS NULL
+         AND expires_at > NOW()
+      RETURNING message, wallet_address
+    `) as Array<{ message: string; wallet_address: string | null }>
+    if (claimed.length === 1) {
+      return {
+        ok: true,
+        message: claimed[0]!.message,
+        wallet_address: claimed[0]!.wallet_address,
+      }
+    }
+    // Step 2: classify the rejection. The row may be absent, used, expired,
+    // or have a different scheme. SELECT once with full columns so we don't
+    // round-trip more than necessary.
+    const inspect = (await sql`
+      SELECT scheme, used_at, expires_at
+        FROM auth_nonces
+       WHERE nonce = ${input.nonce}
+       LIMIT 1
+    `) as Array<{
+      scheme: string
+      used_at: string | Date | null
+      expires_at: string | Date
+    }>
+    if (inspect.length === 0) {
+      return { ok: false, reason: "unknown" }
+    }
+    const row = inspect[0]!
+    // Discriminate in the same order as the prose above.
+    if (row.used_at !== null) {
+      return { ok: false, reason: "used" }
+    }
+    if (row.scheme !== input.expectedScheme) {
+      return { ok: false, reason: "scheme_mismatch" }
+    }
+    // Last classification: must be expired (the only remaining reason the
+    // UPDATE missed when `used_at IS NULL` and scheme matches).
+    return { ok: false, reason: "expired" }
   }
 }
 

@@ -85,6 +85,20 @@ function buildMockSpine(): MockSpine {
     async writeAuditEvent(event) {
       audits.push(event)
     },
+    async mintNonce() {
+      // T1.4 — route tests don't exercise nonce path yet (T1.6's job).
+      return {
+        nonce: "test-mock-nonce",
+        expires_at: "2026-05-24T00:05:00.000Z",
+      }
+    },
+    async consumeNonce() {
+      return {
+        ok: true as const,
+        message: "test-mock-message",
+        wallet_address: null,
+      }
+    },
   }
   return m
 }
