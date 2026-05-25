@@ -341,7 +341,7 @@ describe("POST /v1/link/verified-wallet â€” case (e) BOTH SET, DIFFERENT users â
     const txnAudits: SpineAuditEvent[] = []
     const sentinel: SpineSnapshot = {
       ...mockSpine,
-      async writeAuditEvent(event) {
+      async writeAuditEvent(event: SpineAuditEvent) {
         outerAudits.push(event)
       },
       async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
