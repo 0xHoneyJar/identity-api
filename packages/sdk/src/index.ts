@@ -51,8 +51,10 @@ export {
 // validation as defense-in-depth against server schema drift.
 export type {
   ChallengeReq,
+  ChallengeReqValidated,
   ChallengeResp,
   VerifyReq,
+  VerifyReqValidated,
   VerifyResp,
   ResolveProvider,
   ResolveHitResp,

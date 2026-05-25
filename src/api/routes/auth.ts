@@ -55,7 +55,6 @@
  */
 
 import { jsonResponse } from "@hyper/core"
-import type { z } from "zod"
 import { applyWithSession, route } from "../../auth"
 import { getSpine } from "../spine"
 import {
@@ -82,9 +81,17 @@ import { mintSessionJwt } from "../../jwt-mint"
 // T1.10 — shared request schemas. Sourcing from @freeside-auth/protocol/api
 // instead of inlining gives the SDK (packages/sdk) full client-side typing
 // from the SAME Zod object the server validates against. Single SoT.
+// We import:
+//   - *ReqSchema  → the Zod object handed to Hyper's .body(...)
+//   - *ReqValidated  → z.output (defaults filled) for the post-validate body cast
+// Caller-side type (z.input with optional defaults) is what the SDK exposes;
+// server-side handler uses *ReqValidated since Hyper has already run the
+// schema and filled defaults.
 import {
   ChallengeReqSchema as ChallengeReq,
   VerifyReqSchema as VerifyReq,
+  type ChallengeReqValidated,
+  type VerifyReqValidated,
 } from "@freeside-auth/protocol/api"
 
 // ---------------------------------------------------------------------------
@@ -112,7 +119,10 @@ export const authChallenge = route
     },
   })
   .handle(async (c) => {
-    const body = c.body as z.infer<typeof ChallengeReq>
+    // After Hyper's .body() validator, the body has defaults filled —
+    // use ChallengeReqValidated (z.output) NOT ChallengeReq (z.input
+    // which the SDK uses caller-side, where defaults are still optional).
+    const body = c.body as ChallengeReqValidated
     // Normalize the wallet address to lowercase for storage consistency
     // (matches the resolveByWallet normalization at the engine seam).
     const wallet = body.walletAddress.toLowerCase()
@@ -214,7 +224,8 @@ export const authVerify = applyWithSession(route.post("/v1/auth/verify"))
     },
   })
   .handle(async (c) => {
-    const body = c.body as z.infer<typeof VerifyReq>
+    // VerifyReqValidated (z.output) — defaults filled post-validate.
+    const body = c.body as VerifyReqValidated
     const wallet = body.walletAddress.toLowerCase()
     const spine = getSpine()
 

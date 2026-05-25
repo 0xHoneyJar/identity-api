@@ -14,10 +14,22 @@
  */
 
 // ─── auth surface (FR-A1 / FR-A2) ───────────────────────────────────────────
+//
+// IMPORTANT — *Req types use Zod's `z.input` (NOT `z.infer`). Fields with
+// `.default(...)` are OPTIONAL on the caller side; the server fills them
+// at validate time. This is intentional — `client.auth.challenge({
+// walletAddress })` MUST compile without the redundant `scheme: "siwe"`
+// pass-through.
+//
+// *ReqValidated (also re-exported below) is for advanced consumers who
+// need the post-validate output shape (e.g., a custom middleware that
+// runs the schema themselves and needs to type the result).
 export type {
   ChallengeReq,
+  ChallengeReqValidated,
   ChallengeResp,
   VerifyReq,
+  VerifyReqValidated,
   VerifyResp,
 } from "@freeside-auth/protocol/api"
 

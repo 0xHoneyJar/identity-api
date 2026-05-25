@@ -51,7 +51,22 @@ export const ChallengeReqSchema = z.object({
   statement: z.string().min(1).max(512).optional(),
 })
 
-export type ChallengeReq = z.infer<typeof ChallengeReqSchema>
+/**
+ * Caller-facing request type — fields with `.default()` are OPTIONAL here
+ * (Zod 4 separates `z.input` from `z.output`; the SDK consumer uses input,
+ * the server post-parse handler uses output).
+ *
+ * Why this matters: the SDK's `client.auth.challenge({ walletAddress })` MUST
+ * compile (scheme defaulted server-side). Using `z.infer` would force every
+ * caller to redundantly pass `scheme: "siwe"`.
+ */
+export type ChallengeReq = z.input<typeof ChallengeReqSchema>
+
+/**
+ * Server-side post-validation type — all defaults filled. Use this when
+ * the body has already passed through Hyper's `.body(Schema)` validator.
+ */
+export type ChallengeReqValidated = z.output<typeof ChallengeReqSchema>
 
 /**
  * Challenge response — the caller signs `message` with the wallet's
@@ -83,7 +98,11 @@ export const VerifyReqSchema = z.object({
   scheme: z.enum(["siwe", "eip191"]).default("siwe"),
 })
 
-export type VerifyReq = z.infer<typeof VerifyReqSchema>
+/** Caller-facing request type — `scheme` is optional (defaults to siwe). */
+export type VerifyReq = z.input<typeof VerifyReqSchema>
+
+/** Server-side post-validation type — all defaults filled. */
+export type VerifyReqValidated = z.output<typeof VerifyReqSchema>
 
 /**
  * Verify response — the canonical user_id + session JWT.

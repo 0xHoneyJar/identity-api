@@ -20,7 +20,13 @@
  * No `node:` imports.
  */
 
-import { classifyHttpError, IdentityApiError, NetworkError, type ServerErrorEnvelope } from "./errors"
+import {
+  classifyHttpError,
+  IdentityApiError,
+  NetworkError,
+  UnauthorizedError,
+  type ServerErrorEnvelope,
+} from "./errors"
 
 /** Subset of `fetch` we depend on — also lets us pass narrowed test stubs. */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -110,8 +116,10 @@ export function createTransport(opts: TransportOpts): Transport {
       if (!token) {
         // We could let the server return 401, but failing fast here avoids
         // a round-trip + makes the missing-token bug less mysterious for
-        // SDK users debugging auth flows.
-        throw new IdentityApiError({
+        // SDK users debugging auth flows. UnauthorizedError keeps the
+        // catch-block contract uniform (the server-side 401 also throws
+        // the same class).
+        throw new UnauthorizedError({
           status: 401,
           message: "no JWT configured on client (set `jwt:` at createIdentityClient)",
           code: "missing_token",

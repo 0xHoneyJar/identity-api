@@ -19,8 +19,10 @@ export {
   VerifyReqSchema,
   VerifyRespSchema,
   type ChallengeReq,
+  type ChallengeReqValidated,
   type ChallengeResp,
   type VerifyReq,
+  type VerifyReqValidated,
   type VerifyResp,
 } from "./auth"
 
