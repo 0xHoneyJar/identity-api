@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loa.dev/schemas/freeside-auth/federation/codex.schema.json",
+  "title": "Codex federation contract — GET /v1/mibera/:tokenId + POST /v1/mibera/batch",
+  "description": "Wire shapes for mibera-codex per-tokenId Mibera profiles. Mirrors MiberaEntry from ~/Documents/GitHub/mibera-codex/src/types.ts:46-78. NOTE: codex's primary transport today is MCP — these REST shapes are PROJECTED (see packages/protocol/src/api/federation/codex.ts for the decision tree). JSON-Schema sibling of codex.ts.",
+  "$defs": {
+    "Archetype": {
+      "type": "string",
+      "enum": ["Freetekno", "Milady", "Acidhouse", "Chicago/Detroit"]
+    },
+    "Element": {
+      "type": "string",
+      "enum": ["Earth", "Fire", "Water", "Air"]
+    },
+    "SwagRank": {
+      "type": "string",
+      "enum": ["Sss", "Ss", "S", "A", "B", "C", "D", "F"]
+    },
+    "MiberaEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "archetype", "ancestor", "time_period", "birthday", "birth_coordinates",
+        "sun_sign", "moon_sign", "ascending_sign", "element", "swag_rank", "swag_score",
+        "background", "body", "hair", "eyes", "eyebrows", "mouth", "shirt", "hat",
+        "glasses", "mask", "earrings", "face_accessory", "tattoo", "item", "drug"
+      ],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "archetype": { "$ref": "#/$defs/Archetype" },
+        "ancestor": { "type": "string" },
+        "time_period": { "type": "string" },
+        "birthday": { "type": "string" },
+        "birth_coordinates": { "type": "string" },
+        "sun_sign": { "type": "string" },
+        "moon_sign": { "type": "string" },
+        "ascending_sign": { "type": "string" },
+        "element": { "$ref": "#/$defs/Element" },
+        "swag_rank": { "$ref": "#/$defs/SwagRank" },
+        "swag_score": { "type": "number" },
+        "background": { "type": "string" },
+        "body": { "type": "string" },
+        "hair": { "type": ["string", "null"] },
+        "eyes": { "type": "string" },
+        "eyebrows": { "type": "string" },
+        "mouth": { "type": "string" },
+        "shirt": { "type": ["string", "null"] },
+        "hat": { "type": ["string", "null"] },
+        "glasses": { "type": ["string", "null"] },
+        "mask": { "type": ["string", "null"] },
+        "earrings": { "type": ["string", "null"] },
+        "face_accessory": { "type": ["string", "null"] },
+        "tattoo": { "type": ["string", "null"] },
+        "item": { "type": ["string", "null"] },
+        "drug": { "type": "string" },
+        "parcel": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "GetMiberaBatchReq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokenIds"],
+      "properties": {
+        "tokenIds": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 10000 },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      }
+    },
+    "GetMiberaBatchResp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["miberas"],
+      "properties": {
+        "miberas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MiberaEntry" }
+        }
+      }
+    }
+  }
+}

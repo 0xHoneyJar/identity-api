@@ -60,6 +60,60 @@ export {
 export {
   LinkVerifiedWalletReqSchema,
   LinkVerifiedWalletRespSchema,
+  LinkVerifiedWalletConflictSchema,
   type LinkVerifiedWalletReq,
   type LinkVerifiedWalletResp,
+  type LinkVerifiedWalletConflict,
 } from "./link"
+
+// ─── federation contracts (T2.1) ────────────────────────────────────────────
+//
+// Cross-building wire shapes consumed by identity-api's /v1/profile read-time
+// compose at T2.3. These are NOT first-party identity-api endpoints — they
+// describe what we expect when we call OUT to the other freeside buildings
+// (inventory-api / score-api / mibera-codex). See provenance docstrings in
+// each `./federation/<bldg>.ts` file for source-of-truth references.
+//
+// Re-exported through the federation subdir barrel (./federation/index.ts) so
+// consumers can `import { InventoryGetHoldingsRespSchema, ... } from
+// "@freeside-auth/protocol/api"` or, more narrowly,
+// `import { ... } from "@freeside-auth/protocol/api/federation"`.
+
+export {
+  InventoryAttributeSchema,
+  InventoryCompletenessSchema,
+  InventoryContractHoldingSchema,
+  InventoryGetHoldingsPathSchema,
+  InventoryGetHoldingsRespSchema,
+  type InventoryAttribute,
+  type InventoryCompleteness,
+  type InventoryContractHolding,
+  type InventoryGetHoldingsPath,
+  type InventoryGetHoldingsResp,
+  ScoreCrowdTierSchema,
+  ScoreEliteTierSchema,
+  ScoreTrustClassificationSchema,
+  ScoreGetWalletPathSchema,
+  ScoreGetWalletRespSchema,
+  type ScoreCrowdTier,
+  type ScoreEliteTier,
+  type ScoreTrustClassification,
+  type ScoreGetWalletPath,
+  type ScoreGetWalletResp,
+  CodexArchetypeSchema,
+  CodexElementSchema,
+  CodexSwagRankSchema,
+  CodexGetMiberaPathSchema,
+  CodexGetMiberaBatchReqSchema,
+  CodexMiberaEntrySchema,
+  CodexGetMiberaRespSchema,
+  CodexGetMiberaBatchRespSchema,
+  type CodexArchetype,
+  type CodexElement,
+  type CodexSwagRank,
+  type CodexGetMiberaPath,
+  type CodexGetMiberaBatchReq,
+  type CodexMiberaEntry,
+  type CodexGetMiberaResp,
+  type CodexGetMiberaBatchResp,
+} from "./federation/index"

@@ -99,3 +99,43 @@ export { eip191CredentialBridge } from './credential-bridge-eip191';
 // NO @dynamic-labs/* import anywhere in this file — quarantine enforced
 // by scripts/check-dynamic-quarantine.sh.
 export { dynamicCredentialBridge } from './credential-bridge-dynamic';
+
+// ─── Federation HTTP adapters (T2.1 · bead arrakis-ok93) ────────────────────
+//
+// READ-ONLY HTTP clients for the three upstream freeside buildings
+// identity-api federates from for its /v1/profile read-time compose. Per
+// FR-P3 no-embed: identity-api stores ZERO holdings/scores/dimensions in
+// its spine; we federate-read at compose time.
+//
+// Each adapter implements its corresponding port from @freeside-auth/ports
+// and returns a discriminated-union FederationResult; never throws.
+//
+// Default URLs per packages/freeside-registry/registry.yaml; per-deploy
+// override via env at the singleton-construction site (src/api/{inventory,
+// score, codex}.ts).
+
+export {
+  HttpInventoryAdapter,
+  DEFAULT_INVENTORY_BASE_URL,
+  type HttpInventoryAdapterConfig,
+} from './http-inventory-adapter';
+
+export {
+  HttpScoreAdapter,
+  DEFAULT_SCORE_BASE_URL,
+  SCORE_API_KEY_HEADER,
+  type HttpScoreAdapterConfig,
+} from './http-score-adapter';
+
+export {
+  HttpCodexAdapter,
+  DEFAULT_CODEX_BASE_URL,
+  type HttpCodexAdapterConfig,
+} from './http-codex-adapter';
+
+// federation-http is the shared HTTP plumbing the three adapters use; the
+// FederationLogger type is exported so callers can pass a compatible logger
+// surface at adapter construction.
+export {
+  type FederationLogger,
+} from './federation-http';

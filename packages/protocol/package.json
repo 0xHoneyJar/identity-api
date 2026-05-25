@@ -25,7 +25,14 @@
     "./api/auth": "./src/api/auth.ts",
     "./api/resolve": "./src/api/resolve.ts",
     "./api/profile": "./src/api/profile.ts",
-    "./api/link": "./src/api/link.ts"
+    "./api/link": "./src/api/link.ts",
+    "./api/federation": "./src/api/federation/index.ts",
+    "./api/federation/inventory": "./src/api/federation/inventory.ts",
+    "./api/federation/inventory.schema.json": "./src/api/federation/inventory.schema.json",
+    "./api/federation/score": "./src/api/federation/score.ts",
+    "./api/federation/score.schema.json": "./src/api/federation/score.schema.json",
+    "./api/federation/codex": "./src/api/federation/codex.ts",
+    "./api/federation/codex.schema.json": "./src/api/federation/codex.schema.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
