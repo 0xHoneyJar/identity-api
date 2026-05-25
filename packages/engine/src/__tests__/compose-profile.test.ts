@@ -646,4 +646,78 @@ describe("composeProfile (T2.2 · FR-P1..P4 / NFR-2 / D6 / D8)", () => {
     expect(deps.breakers.score.__getState()).toBe("closed")
     expect(deps.breakers.score.__getFailureCount()).toBe(0)
   })
+
+  // ── BB review F-003: rate_limited does NOT tick the breaker ────────────
+
+  it("score returning rate_limited does NOT tick the breaker (429 = healthy throttle, BB F-003)", async () => {
+    // 429 Too Many Requests is a polite "slow down" from a healthy upstream.
+    // If it tripped the breaker, a burst of 429s would self-inflict a 30s
+    // blackout indistinguishable from a real outage.
+    deps.inventory.__setHoldingsForWallet(WALLET, holdingsFixture({}))
+    deps.score.__setFailureForWallet(WALLET, {
+      kind: "rate_limited",
+      message: "score-api 429",
+      statusCode: 429,
+    })
+    for (let i = 0; i < 10; i++) {
+      await composeProfile(deps, { walletAddress: WALLET })
+    }
+    expect(deps.breakers.score.__getState()).toBe("closed")
+    expect(deps.breakers.score.__getFailureCount()).toBe(0)
+  })
+
+  it("inventory returning rate_limited does NOT tick the breaker (BB F-003)", async () => {
+    deps.inventory.__setFailureForWallet(WALLET, {
+      kind: "rate_limited",
+      message: "inventory-api 429",
+      statusCode: 429,
+    })
+    for (let i = 0; i < 10; i++) {
+      const resp = await composeProfile(deps, { walletAddress: WALLET })
+      expect(resp.degraded).toContain("inventory:rate_limited")
+    }
+    expect(deps.breakers.inventory.__getState()).toBe("closed")
+    expect(deps.breakers.inventory.__getFailureCount()).toBe(0)
+  })
+
+  it("rate_limited and not_found are TRULY NEUTRAL — must not erase prior real failures (FAGAN-on-BB-fix)", async () => {
+    // FAGAN iter-1 on the BB-driven F-003 fix: recordSuccess() clears the
+    // breaker's failureTimestamps array. If rate_limited / not_found
+    // called recordSuccess(), a 429 (or 404) following 4 real failures
+    // would erase the 4 failures from the rolling window — defeating
+    // the breaker's "5 failures within window" trip condition.
+    //
+    // Test: stack 4 real upstream_5xx failures on score, then a single
+    // rate_limited, then a 5th real failure. With the neutral handling,
+    // the 5 real failures should TRIP the breaker. With the prior
+    // recordSuccess() bug, the rate_limited would have cleared the
+    // first 4 and the 5th alone would leave the breaker closed.
+    deps.inventory.__setHoldingsForWallet(WALLET, holdingsFixture({}))
+    // 4 real failures
+    deps.score.__setFailureForWallet(WALLET, {
+      kind: "upstream_5xx",
+      message: "real outage",
+      statusCode: 503,
+    })
+    for (let i = 0; i < 4; i++) {
+      await composeProfile(deps, { walletAddress: WALLET })
+    }
+    expect(deps.breakers.score.__getFailureCount()).toBe(4)
+    // 1 rate_limited — must be NEUTRAL (no erase, no tick)
+    deps.score.__setFailureForWallet(WALLET, {
+      kind: "rate_limited",
+      message: "throttle",
+      statusCode: 429,
+    })
+    await composeProfile(deps, { walletAddress: WALLET })
+    expect(deps.breakers.score.__getFailureCount()).toBe(4) // unchanged
+    // 5th real failure — must TRIP the breaker (5 real within window)
+    deps.score.__setFailureForWallet(WALLET, {
+      kind: "upstream_5xx",
+      message: "real outage continues",
+      statusCode: 503,
+    })
+    await composeProfile(deps, { walletAddress: WALLET })
+    expect(deps.breakers.score.__getState()).toBe("open")
+  })
 })

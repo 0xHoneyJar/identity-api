@@ -57,6 +57,7 @@ export type FederationFailureKind =
   | "timeout"
   | "unauthorized"
   | "not_found"
+  | "rate_limited"
   | "upstream_5xx"
   | "parse_error"
   | "network_error"
@@ -68,6 +69,9 @@ export type FederationFailureKind =
  * `statusCode` semantics:
  *   - `401` for `unauthorized`
  *   - `404` for `not_found`
+ *   - `429` for `rate_limited` (BB review F-003 — healthy upstream throttling;
+ *     MUST NOT trip the breaker because it indicates a polite slow-down, not
+ *     an outage. The orchestrator's recordOutcome exempts this kind.)
  *   - the actual 5xx for `upstream_5xx` (500, 502, 503, 504, ...)
  *   - present for `parse_error` when the upstream DID respond 2xx but with
  *     a body the schema rejected

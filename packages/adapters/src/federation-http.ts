@@ -206,6 +206,22 @@ export async function federationHttpCall<TData>(
       context: { ...opts.context, url: opts.url },
     })
   }
+  // BB review F-003: 429 Too Many Requests is a HEALTHY upstream signaling
+  // "slow down" — NOT an outage. Classifying as parse_error → breaker trip →
+  // 30s self-inflicted blackout. Map to rate_limited (exempt from breaker
+  // per compose-profile recordOutcome).
+  if (response.status === 429) {
+    log.warn(
+      { building: opts.building, url: opts.url, ...opts.context },
+      "federation: upstream returned 429 rate-limited",
+    )
+    return failure({
+      kind: "rate_limited",
+      message: `federation: ${opts.building} returned 429 (rate-limited; upstream is healthy)`,
+      statusCode: 429,
+      context: { ...opts.context, url: opts.url },
+    })
+  }
   if (response.status >= 500 && response.status <= 599) {
     log.warn(
       {

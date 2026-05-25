@@ -114,6 +114,31 @@ describe("federationHttpCall (T2.1 shared HTTP plumbing)", () => {
     }
   })
 
+  it("429 → rate_limited (BB F-003) — distinct from parse_error, exempt from breaker", async () => {
+    // BB review F-003: 429 used to fall through to the catch-all parse_error
+    // branch, which trips the breaker → 30s self-inflicted blackouts on
+    // upstream throttle. Now classified as a dedicated kind.
+    const stub = async () =>
+      new Response('{"code":"rate_limited"}', {
+        status: 429,
+        headers: { "content-type": "application/json" },
+      })
+    const res = await federationHttpCall({
+      url: "https://example.com/test",
+      method: "GET",
+      headers: {},
+      responseSchema: HelloSchema,
+      portOpts: { fetchImpl: stub },
+      building: "test",
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.reason.kind).toBe("rate_limited")
+      expect(res.reason.statusCode).toBe(429)
+      expect(res.reason.message).toContain("429")
+    }
+  })
+
   it("200 with non-JSON body → parse_error", async () => {
     const stub = async () => new Response("<html>error page</html>", { status: 200 })
     const res = await federationHttpCall({

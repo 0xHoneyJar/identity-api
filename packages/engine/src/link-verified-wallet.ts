@@ -224,7 +224,7 @@ export async function linkVerifiedWallet(
         conflictResolved = "discord_rebound"
         break
 
-      case "collision":
+      case "collision": {
         // Write the rejected-attempt audit through the OUTER `spine` — not
         // `txnSpine` — because throwing immediately below aborts the
         // transaction and rolls back every txn-scoped write. The audit
@@ -232,20 +232,38 @@ export async function linkVerifiedWallet(
         // so it commits independently. FAGAN iter-1 finding: the mock
         // pass-through txn would hide this rollback in tests; real PG
         // would silently lose the audit.
-        await spine.writeAuditEvent({
-          event_type: "conflict_rejected",
-          user_id: null,
-          actor,
-          payload: {
-            conflict_kind: "cross_user_collision",
-            wallet_address: walletAddress,
-            discord_id: discordId,
-            world_slug: input.worldSlug,
-            wallet_user_id: decision.walletUser,
-            discord_user_id: decision.discordUser,
-          },
-        })
+        //
+        // BB review F-005: wrap the audit in try/catch so a transient
+        // audit-write failure can't suppress the typed collision error.
+        // The collision IS the business outcome; audit is observability
+        // infrastructure (Spanner / Stripe convention: a failure in the
+        // observer must never change the outcome of the observed
+        // operation). Log audit failures; ALWAYS throw the typed error.
+        try {
+          await spine.writeAuditEvent({
+            event_type: "conflict_rejected",
+            user_id: null,
+            actor,
+            payload: {
+              conflict_kind: "cross_user_collision",
+              wallet_address: walletAddress,
+              discord_id: discordId,
+              world_slug: input.worldSlug,
+              wallet_user_id: decision.walletUser,
+              discord_user_id: decision.discordUser,
+            },
+          })
+        } catch (auditErr) {
+          // The audit infrastructure is down or misconfigured. Log loudly
+          // so ops sees it, but do NOT suppress the typed collision —
+          // the route handler must still map this to 409, not 500.
+          console.error(
+            "[link-verified-wallet] collision audit-write failed; collision still surfaced as 409:",
+            auditErr,
+          )
+        }
         throw new LinkCrossUserCollisionError(decision.walletUser, decision.discordUser)
+      }
     }
 
     // Optional: link the Dynamic-SDK user_id as a linked_account when

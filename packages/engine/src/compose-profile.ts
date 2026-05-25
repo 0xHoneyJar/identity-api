@@ -370,13 +370,15 @@ export function recordOutcome(
     // Don't feed the breaker its own synthesized outcome.
     return
   }
-  // Special case: `not_found` for score-api is the typical "wallet has no
-  // scoring data yet" path (per ScorePort docstring). It's a legitimate
-  // upstream response, not a health signal — don't tick the breaker on
-  // 404s. Same logic applies to any 404 in v1: a 404 means the upstream
-  // is healthy enough to respond with a typed 404 envelope.
-  if (result.reason.kind === "not_found") {
-    breaker.recordSuccess()
+  // `not_found` (404) and `rate_limited` (429) are HEALTHY upstream
+  // responses — they must not tick the failure counter (otherwise a burst
+  // would open the breaker and self-inflict a blackout), but they also
+  // must NOT call recordSuccess() — that would CLEAR prior real failure
+  // timestamps (FAGAN iter-1 on the BB-driven fix: recordSuccess resets
+  // failureTimestamps, so a single not_found OR rate_limited would erase
+  // 4 prior real failures from a different code path). Truly neutral:
+  // skip both ticks, return cleanly.
+  if (result.reason.kind === "not_found" || result.reason.kind === "rate_limited") {
     return
   }
   breaker.recordFailure()

@@ -378,6 +378,40 @@ describe("POST /v1/link/verified-wallet — case (e) BOTH SET, DIFFERENT users �
     }
   })
 
+  it("conflict_rejected audit FAILURE does not suppress the typed 409 (BB F-005 regression)", async () => {
+    // BB review F-005: a transient audit-write failure used to propagate
+    // unchanged through the orchestrator → the route's catch only matched
+    // LinkCrossUserCollisionError → the audit-DB-error leaked as 500.
+    // Now the audit is in its own try/catch; failures log but the typed
+    // collision error ALWAYS reaches the route handler → 409.
+    const auditErrors: Error[] = []
+    const sentinel: SpineSnapshot = {
+      ...mockSpine,
+      async writeAuditEvent(_event: SpineAuditEvent) {
+        const err = new Error("simulated audit DB unavailable")
+        auditErrors.push(err)
+        throw err
+      },
+      async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
+        return fn(this as unknown as SpinePort)
+      },
+    } as unknown as SpineSnapshot
+    __setSpineForTest(sentinel as unknown as SpinePort)
+    mockSpine.resolveByWalletReturns = USER_A
+    mockSpine.resolveByAccountByProvider = { discord: USER_B }
+    try {
+      const { status, body } = await postLink({})
+      // CRITICAL: still 409, NOT 500. Collision IS the business outcome;
+      // audit-write failure is observability infra and must not change it.
+      expect(status).toBe(409)
+      expect((body as LinkConflictBody).conflict).toBe("cross_user_collision")
+      // The audit write was attempted at least once (and failed).
+      expect(auditErrors.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      __setSpineForTest(mockSpine)
+    }
+  })
+
   it("does NOT link dynamic_user_id on collision (no writes after collision detection)", async () => {
     mockSpine.resolveByWalletReturns = USER_A
     mockSpine.resolveByAccountByProvider = { discord: USER_B }
