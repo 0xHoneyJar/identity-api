@@ -65,3 +65,12 @@ export {
   resolveOrMintByWallet,
   type AuditActor,
 } from './resolve-spine';
+
+// Auth nonce orchestrators (T1.4 · FR-A1 lifecycle: mint + atomic consume +
+// audit pairing). T1.6's /v1/auth/challenge + /v1/auth/verify import from here.
+export {
+  mintAuthNonce,
+  consumeAuthNonce,
+  type MintAuthNonceOpts,
+  type ConsumeAuthNonceOpts,
+} from './auth-nonces';
