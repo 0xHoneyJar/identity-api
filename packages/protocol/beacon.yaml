@@ -1,0 +1,134 @@
+# packages/protocol/beacon.yaml — identity-api building beacon (BeaconV3)
+#
+# Per PRD v3.0 §4.1 FR-B2 + SDD §4.1.
+# Validated against `packages/beacon-schema/src/beacon-v3.ts` (BeaconV3Schema)
+# in loa-freeside (see grimoires/loa/notes/t1.8-beacon-notes.md for the
+# validation receipt).
+#
+# This file is the source-of-truth authored shape. At deploy time the build
+# step (T2.x / freeside-cli doctor) recomputes placeholder hashes:
+#   - composes_with.<sibling>.tag       (TagName@semver+<sha256_prefix>)
+#   - sealed_schemas.<n>.hash           (full 64-hex sha256 of canonical JSON)
+# and emits the resolved JSON to /.well-known/beacon.json.
+#
+# Shape mirrors the canonical inventory-api fixture:
+#   loa-freeside/packages/beacon-schema/tests/fixtures/freeside-inventory-v3.yaml
+
+schema_version: "3"
+slug: "identity-api"
+publisher: "0xHoneyJar"
+
+# ─── Identity + boundaries (per ADR-008 §D-11) ───────────────────────────
+
+is:
+  one_liner: "Central identity SoR: resolve one human across wallets/accounts/worlds; serve composed per-world profiles"
+  scope:
+    - "Wallet-first authentication (SIWE + legacy EIP-191) issuing JWT/cookie sessions"
+    - "Central resolution spine: user, wallets(+primary), linked_accounts, world_identity"
+    - "Compose per-world profiles from holdings + score + dimensions on read"
+
+is_not:
+  - "Does NOT index chains or compute score — composes inventory-api / score-api / codex"
+  - "Will NOT store per-world content (bios, dimensions, holdings) — the spine is resolution-only"
+  - "Refuses to call any third-party auth provider (Dynamic) in the auth path"
+  - "Does NOT own the credential UI — wallet-connect / passkey / SeedVault are pluggable client-side"
+
+# ─── Composition (sibling buildings the spine reads at compose time) ──────
+# NOTE: the `tag` hashes below + the sealed_schemas hashes are PLACEHOLDERS —
+# they satisfy the format regex `TagName@\d+\.\d+\.\d+\+[a-f0-9]{8,16}$` but
+# are NOT grounded against real port schemas. `freeside-cli doctor` (T2a)
+# recomputes them at validation time. Same discipline as the inventory
+# fixture comments — do not hand-fabricate real hashes.
+
+composes_with:
+  inventory-api:
+    role: "Holdings source for profile composition (read-time)"
+    tag: "InventoryPort@1.0.0+0000000000000000"   # PLACEHOLDER — doctor (T2a) recomputes
+    required: false
+  score-api:
+    role: "Score source for profile composition (read-time)"
+    tag: "ScorePort@1.0.0+0000000000000000"        # PLACEHOLDER — doctor recomputes
+    required: false
+  codex:
+    role: "7-dimension Mibera trait + grail source (read-time)"
+    tag: "CodexPort@1.0.0+0000000000000000"        # PLACEHOLDER — doctor recomputes
+    required: true
+
+# ─── ACVP invariants (verifiability discipline) ───────────────────────────
+
+acvp_invariants:
+  - id: idempotency
+    scope: "Re-linking the same (wallet,user) or (account,user) is a no-op upsert (NFR-7)"
+    proof_artifact: "tests/acvp/idempotency.test.ts"
+  - id: audit_replay
+    scope: "Every link/unlink/primary-change/conflict emits an append-only audit event (NFR-5)"
+    proof_artifact: "tests/acvp/audit_replay.test.ts"
+
+# ─── Sealed schemas (hash-verified protocol surface) ──────────────────────
+
+sealed_schemas:
+  - path: "packages/protocol/identity-resolution.schema.json"
+    hash: "0000000000000000000000000000000000000000000000000000000000000000"  # PLACEHOLDER — doctor recomputes
+    consumers:
+      - "honey-road"
+      - "sietch"
+  - path: "packages/protocol/profile-shape.schema.json"
+    hash: "0000000000000000000000000000000000000000000000000000000000000000"  # PLACEHOLDER — doctor recomputes
+    consumers:
+      - "honey-road"
+
+# ─── Capabilities (the public method surface) ─────────────────────────────
+# These mirror the 10 spine route exports in src/api/routes/*.ts that opt
+# into MCP via meta.mcp (T1.1 boot proof: 10/13 routes — health/openapi/docs
+# are operational, not capabilities).
+
+capabilities:
+  - resolveByWallet         # FR-R1  · src/api/routes/resolve.ts
+  - resolveByAccount        # FR-R2  · src/api/routes/resolve.ts
+  - resolveByNym            # FR-R3  · src/api/routes/resolve.ts
+  - getIdentity             # FR-R4  · src/api/routes/resolve.ts
+  - authChallenge           # FR-A1  · src/api/routes/auth.ts
+  - authVerify              # FR-A2  · src/api/routes/auth.ts
+  - getMe                   # FR-A3  · src/api/routes/me.ts
+  - getProfile              # FR-P1  · src/api/routes/profile.ts
+  - getMiberaDimensions     # FR-P2  · src/api/routes/profile.ts
+  - linkVerifiedWallet      # FR-L1  · src/api/routes/link.ts (cycle-c redirect)
+
+# ─── Cycle state (honest maturity signal) ─────────────────────────────────
+
+cycle_state:
+  status: candidate           # Sprint 1 — Hyper runtime + spine stubs + migrations landed; reads/writes pending T1.5+
+  since: "2026-05-24"
+  next_review: "2026-08-24"   # +92d, within the +180d doctor cap
+
+# ─── Transport (optional V2 McpBlock — present once MCP deploys) ──────────
+# Subset of the 10 capabilities exposed via the gateway. Scoped intentionally
+# to the unauthenticated read-tools (resolveByWallet + getProfile +
+# getMiberaDimensions) — the auth/me/link flows require session state and
+# are NOT MCP-tenant-callable. Matches SDD §4.1 verbatim.
+
+mcp:
+  shape: data
+  paths:
+    - remote-http
+  remote:
+    transport: streamable-http
+    endpoint: ${MCP_REMOTE_ENDPOINT}
+  auth:
+    kind: api-key
+    header: X-MCP-Key
+    credentials_ref:
+      type: railway-secret
+      key: MCP_IDENTITY_UPSTREAM_KEY
+  capabilities:
+    - tools
+  tools:
+    - resolveByWallet
+    - getProfile
+    - getMiberaDimensions
+  source_of_truth:
+    type: database
+  pricing:
+    model: free
+    description: First-party tenant — free during initial rollout
+  publisher: "0xHoneyJar"
