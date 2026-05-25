@@ -16,7 +16,8 @@
     "noEmit": true,
     "types": ["@types/bun"],
     "paths": {
-      "@hyper/*": ["./src/hyper/*", "./src/hyper/*/index.ts"]
+      "@hyper/*": ["./src/hyper/*", "./src/hyper/*/index.ts"],
+      "@freeside-auth/*": ["./packages/*/src"]
     }
   },
   "include": ["src/**/*.ts", "packages/*/src/**/*.ts"],
