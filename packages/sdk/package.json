@@ -1,0 +1,29 @@
+{
+  "name": "@freeside-auth/identity-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed HTTP client for identity-api — source-distributed (NOT npm). Consumers vendor this package's src/ tree into their own repo (shadcn-style 'add' pattern) per PRD v3.0 §11 post-verify lock-ins. See README.md §Vendoring. Internal workspace name: @freeside-auth/identity-client. External vendored alias (per-consumer): @0xhoneyjar/identity.",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./transport": "./src/transport.ts",
+    "./types": "./src/types.ts",
+    "./errors": "./src/errors.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "zod": "^3.23.0 || ^4.0.0"
+  },
+  "devDependencies": {
+    "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "@freeside-auth/protocol": "workspace:*"
+  }
+}

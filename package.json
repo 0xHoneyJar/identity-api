@@ -15,6 +15,7 @@
     "packages/adapters",
     "packages/mcp-tools",
     "packages/engine",
+    "packages/sdk",
     "packages/ui"
   ],
   "scripts": {

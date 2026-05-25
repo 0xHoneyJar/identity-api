@@ -65,6 +65,19 @@
         "zod": "^3.23.0 || ^4.0.0",
       },
     },
+    "packages/sdk": {
+      "name": "@freeside-auth/identity-client",
+      "version": "0.1.0",
+      "dependencies": {
+        "@freeside-auth/protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "zod": "^4.4.3",
+      },
+      "peerDependencies": {
+        "zod": "^3.23.0 || ^4.0.0",
+      },
+    },
     "packages/ui": {
       "name": "@freeside-auth/ui",
       "version": "0.1.0",
@@ -79,6 +92,8 @@
     "@freeside-auth/adapters": ["@freeside-auth/adapters@workspace:packages/adapters"],
 
     "@freeside-auth/engine": ["@freeside-auth/engine@workspace:packages/engine"],
+
+    "@freeside-auth/identity-client": ["@freeside-auth/identity-client@workspace:packages/sdk"],
 
     "@freeside-auth/mcp-tools": ["@freeside-auth/mcp-tools@workspace:packages/mcp-tools"],
 
