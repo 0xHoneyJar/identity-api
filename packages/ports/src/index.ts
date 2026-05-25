@@ -30,6 +30,7 @@ export {
 } from './jwt-verifier.port';
 
 // Spine SoR port (T1.5 · central identity-api spine; the writer of FR-R6)
+// Extended in T1.4 with auth_nonces lifecycle (mintNonce / consumeNonce).
 export {
   type SpinePort,
   type SpineLinkedAccountProvider,
@@ -38,4 +39,10 @@ export {
   type SpineWorldIdentity,
   type SpineIdentityShape,
   type SpineAuditEvent,
+  // T1.4 nonce lifecycle types (FR-A1)
+  type SpineNonceScheme,
+  type MintNonceInput,
+  type MintNonceResult,
+  type ConsumeNonceInput,
+  type ConsumeNonceResult,
 } from './spine.port';

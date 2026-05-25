@@ -81,6 +81,63 @@ export interface SpineAuditEvent {
   readonly payload: Record<string, unknown>
 }
 
+// ─── auth_nonces lifecycle (T1.4 · FR-A1) ──────────────────────────────────
+
+/**
+ * Signature scheme used to construct the challenge message. Mirrors the
+ * `CHECK (scheme IN ('siwe','eip191'))` constraint on `auth_nonces.scheme`
+ * (SDD §3.2).
+ *
+ *   - `siwe`   — EIP-4361 message; primary per FR-A1.
+ *   - `eip191` — legacy `personal_sign` envelope; supported for the
+ *                Sietch-compatible fallback path.
+ */
+export type SpineNonceScheme = "siwe" | "eip191"
+
+/** Input shape for `mintNonce`. TTL defaults to 300s server-side. */
+export interface MintNonceInput {
+  /** Signature scheme the caller will use to sign the returned `message`. */
+  readonly scheme: SpineNonceScheme
+  /** The exact string the wallet will sign. Stored verbatim for replay-defense. */
+  readonly message: string
+  /** Optional wallet hint (NULLable until verify per SDD §3.2). */
+  readonly walletAddress?: string | null
+  /** Override server default (300s) only when test/operator requires it. */
+  readonly ttlSec?: number
+}
+
+/** Mint result — the random nonce string + the absolute expiry. */
+export interface MintNonceResult {
+  /** Base64URL-encoded 32 bytes from a CSPRNG (43 chars, URL-safe). */
+  readonly nonce: string
+  /** Absolute expiry timestamp (ISO 8601, UTC). */
+  readonly expires_at: string
+}
+
+/** Input shape for `consumeNonce`. */
+export interface ConsumeNonceInput {
+  /** Nonce string presented by the verifier. */
+  readonly nonce: string
+  /** Scheme the verifier claims it used to sign — MUST match the minted row. */
+  readonly expectedScheme: SpineNonceScheme
+}
+
+/**
+ * Outcome of `consumeNonce` — discriminated on `ok` so the auth flow can map
+ * each rejection class to a precise 401 envelope (CHALLENGE_EXPIRED,
+ * CHALLENGE_USED, etc.) per SDD §5.2 + §5.6.
+ *
+ *   - `unknown`         — no such nonce row (typo, replay against rotated DB)
+ *   - `used`            — already consumed (single-use enforcement)
+ *   - `expired`         — past `expires_at` (TTL fence)
+ *   - `scheme_mismatch` — verifier's `expectedScheme` differs from the
+ *                         minted row's scheme; refuse to verify under the
+ *                         wrong recovery primitive.
+ */
+export type ConsumeNonceResult =
+  | { readonly ok: true; readonly message: string; readonly wallet_address: string | null }
+  | { readonly ok: false; readonly reason: "unknown" | "used" | "expired" | "scheme_mismatch" }
+
 // ─── the port ──────────────────────────────────────────────────────────────
 
 /**
@@ -125,4 +182,39 @@ export interface SpinePort {
 
   // audit (NFR-5)
   writeAuditEvent(event: SpineAuditEvent): Promise<void>
+
+  // auth_nonces lifecycle (T1.4 · FR-A1) ----------------------------------
+  // The nonce is part of the spine PG (same DB connection, same audit chain);
+  // extending SpinePort keeps one port per bounded context and lets T1.6's
+  // /v1/auth/challenge + /v1/auth/verify reuse the existing `getSpine()`
+  // singleton wiring from `src/api/spine.ts`. See T1.4 build notes for the
+  // alternative (a separate `NoncePort`) and why this layout was chosen.
+
+  /**
+   * Mint a fresh nonce row. Server generates a 32-byte CSPRNG nonce
+   * (`crypto.randomBytes(32)` → base64url) and inserts it with the caller's
+   * scheme + message + (optional) wallet hint + computed `expires_at`.
+   *
+   * Returns the nonce + absolute expiry. NEVER returns an already-used
+   * nonce — collisions on the UNIQUE constraint surface as a write error
+   * (which the engine layer can retry transparently; the 256-bit collision
+   * probability is cryptographically negligible).
+   */
+  mintNonce(input: MintNonceInput): Promise<MintNonceResult>
+
+  /**
+   * Atomically consume a nonce.
+   *
+   * Implementation MUST use a single `UPDATE ... RETURNING` statement
+   * conditioned on `used_at IS NULL` AND `expires_at > NOW()` AND `scheme = $`.
+   * The atomic UPDATE-RETURNING pattern is non-negotiable: a read-then-write
+   * implementation has a TOCTOU race where two concurrent verify calls for
+   * the same nonce both pass the read check, both proceed to verify, and
+   * both succeed — defeating single-use semantics (FR-A1 SDD §5.2 step 3).
+   *
+   * If the UPDATE-RETURNING returns 0 rows, a follow-up SELECT classifies
+   * the rejection: `unknown` / `used` / `expired` / `scheme_mismatch` so the
+   * route layer can map to the right 401 envelope.
+   */
+  consumeNonce(input: ConsumeNonceInput): Promise<ConsumeNonceResult>
 }
