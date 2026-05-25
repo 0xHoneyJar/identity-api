@@ -1,8 +1,9 @@
 {
-  "name": "freeside-auth",
+  "name": "identity-api",
   "version": "0.1.0",
   "private": true,
-  "description": "Auth module for the THJ ecosystem \u2014 wallet \u2192 canonical user, multi-credential linking (SIWE / passkey / Discord-bot / Telegram-bot / Dynamic-legacy), JWT claims via Freeside JWKS. Sealed schemas + agent surface (MCP) + headless engine. Apps port into this; this module does not drive any one app UX. DRAFT under major revision per codex 2026-04-29; see freeside-auth-requirements-seed-2026-04-29.md.",
+  "type": "module",
+  "description": "identity-api — the central identity SoR for the freeside ecosystem. Hyper-based single-service building: wallet-first auth (SIWE + legacy EIP-191), resolution spine (users / wallets[] / credentials / per-world nyms), read-time compose over inventory + score + codex. Externally consumed as source-distributed vendored client (NOT npm).",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,8 +17,19 @@
     "packages/engine",
     "packages/ui"
   ],
+  "scripts": {
+    "dev": "bun --hot src/api/index.ts",
+    "start": "bun src/api/index.ts",
+    "build": "bun build src/api/index.ts --target=bun --outdir=dist",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
     "@types/bun": "latest",
+    "@usehyper/cli": "^0.1.1",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
