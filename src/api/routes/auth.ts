@@ -65,7 +65,19 @@ import {
   WalletLinkRaceError,
 } from "@freeside-auth/engine"
 import type { SpinePort } from "@freeside-auth/ports"
-import { verifySignature } from "@freeside-auth/adapters"
+// T1.7 — credential bridges replace the inline verifySignature call. SIWE +
+// EIP-191 live-path bridges thinly wrap the T1.6 verifier (no new crypto);
+// the Dynamic bridge is BACKFILL ONLY (usableInLivePath: false) and the
+// live-path quarantine check below 401s it instantly.
+import {
+  type CredentialBridge,
+  type CredentialBridgeRegistry,
+  type CredentialScheme,
+  type VerifyInput,
+  siweCredentialBridge,
+  eip191CredentialBridge,
+  dynamicCredentialBridge,
+} from "@freeside-auth/adapters"
 import { mintSessionJwt } from "../../jwt-mint"
 
 // ---------------------------------------------------------------------------
@@ -156,8 +168,39 @@ const VerifyReq = z.object({
   nonce: z.string().min(1).max(128),
   signature: z.string().regex(/^0x[a-fA-F0-9]+$/, "must be a 0x-prefixed hex signature"),
   walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  // The Zod enum only admits the two live-path schemes — `dynamic_user_id` is
+  // structurally inaccessible from the request body (FR-A4 enforced at the
+  // Zod boundary). The bridge-dispatch live-path check below is
+  // defense-in-depth against a future scheme addition that forgets to
+  // re-audit Zod first.
   scheme: z.enum(["siwe", "eip191"]).default("siwe"),
 })
+
+/**
+ * Credential bridge registry — the T1.7 dispatch table.
+ *
+ * Mapping `CredentialScheme → CredentialBridge`. The route handler at
+ * /v1/auth/verify selects a bridge by scheme, checks its
+ * `usableInLivePath` flag, and (on green) calls `bridge.verify(input)`.
+ *
+ * Exhaustiveness over `CredentialScheme` is enforced by the index type —
+ * adding a new scheme without a bridge is a TypeScript error.
+ *
+ * Per PRD §3 D3-reframed + §4.3 FR-A4:
+ *   - siwe + eip191  → usableInLivePath: true  (wallet-first)
+ *   - dynamic_user_id → usableInLivePath: false (BACKFILL ONLY)
+ *
+ * The dynamic bridge is registered here SOLELY so the route's live-path
+ * quarantine check has a uniform entry point — never to actually serve
+ * traffic from /v1/auth/verify. The Zod enum above prevents the
+ * scheme from reaching this dispatch in the first place; the runtime
+ * `usableInLivePath` check is the second line of defense.
+ */
+const CREDENTIAL_BRIDGES: CredentialBridgeRegistry = Object.freeze({
+  siwe: siweCredentialBridge,
+  eip191: eip191CredentialBridge,
+  dynamic_user_id: dynamicCredentialBridge,
+}) satisfies CredentialBridgeRegistry
 
 /**
  * 401 envelope helper. Centralized so audit-emit + response stay in lockstep
@@ -234,19 +277,53 @@ export const authVerify = applyWithSession(route.post("/v1/auth/verify"))
       )
     }
 
-    // ─── Step 3: verify the signature ───────────────────────────────────
-    // The consumed.message is the canonical string the wallet was asked
-    // to sign — that's the recovery input. We compare the recovered
-    // address to the verify-body wallet (which we've already cross-checked
-    // against the nonce's wallet hint above).
-    const verifyRes = await verifySignature({
-      scheme: body.scheme,
+    // ─── Step 3: dispatch to the credential bridge (T1.7 / FR-A4) ───────
+    //
+    // T1.6's inline verifySignature call is replaced with a per-scheme
+    // bridge dispatch. The bridge SHAPE (not behavior) is what changes —
+    // SIWE + EIP-191 bridges thinly wrap the same viem-backed primitive.
+    //
+    // Step 3a: select the bridge by scheme. The Zod enum above already
+    // restricts to siwe|eip191 — the registry lookup is total over the
+    // enum so this is statically safe.
+    const bridgeScheme: CredentialScheme = body.scheme
+    const bridge: CredentialBridge = CREDENTIAL_BRIDGES[bridgeScheme]
+
+    // Step 3b: live-path quarantine (FR-A4 enforcement).
+    //
+    // Even though the Zod enum prevents `dynamic_user_id` from reaching
+    // this branch, the runtime `usableInLivePath` check is the
+    // structurally load-bearing line that proves the Dynamic SDK is
+    // unreachable from /v1/auth/verify. If a future PR adds a new scheme
+    // to the Zod enum without auditing its live-path eligibility, this
+    // check catches it. Reject BEFORE attempting verify().
+    if (!bridge.usableInLivePath) {
+      // No audit-emit here — we never actually attempted to verify a
+      // credential; the scheme was structurally rejected at the dispatch
+      // layer. (auth_signature_rejected is specifically for verify-time
+      // signature failures per the T1.6 audit chain shape.)
+      return unauthorized401(
+        "scheme_not_allowed_in_live_path",
+        "Credential scheme is not eligible for live-path verification",
+      )
+    }
+
+    // Step 3c: invoke the bridge. The consumed.message is the canonical
+    // string the wallet was asked to sign — that's the recovery input.
+    // The bridge's success shape is `{ok: true, walletAddress, …}`; we
+    // cross-check the bridge-resolved walletAddress against the verify
+    // body's walletAddress (defense-in-depth — the bridge already
+    // recovered against `expectedAddress: wallet`).
+    const verifyInput: VerifyInput = {
+      scheme: bridgeScheme,
       message: consumed.message,
       signature: body.signature,
       expectedAddress: wallet,
-    })
+    }
+    const verifyRes = await bridge.verify(verifyInput)
     if (!verifyRes.ok) {
-      // Audit the rejection (with the reason so an auditor can spot patterns).
+      // Audit the rejection (preserve the T1.6 audit shape verbatim —
+      // event_type, payload.reason vocabulary, user_id null, actor self).
       await spine.writeAuditEvent({
         event_type: "auth_signature_rejected",
         user_id: null,

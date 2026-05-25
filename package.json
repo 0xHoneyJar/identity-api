@@ -23,6 +23,8 @@
     "build": "bun build src/api/index.ts --target=bun --outdir=dist",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "check:dynamic-quarantine": "bash scripts/check-dynamic-quarantine.sh",
+    "check": "bun run check:dynamic-quarantine",
     "migrate": "bun scripts/migrate.ts up",
     "migrate:down": "bun scripts/migrate.ts down",
     "migrate:status": "bun scripts/migrate.ts status"
