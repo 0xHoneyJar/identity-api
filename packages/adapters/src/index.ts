@@ -23,6 +23,20 @@ export {
   type MidiProfileRow,
 } from './postgres-split-adapter';
 
+// Spine SoR adapter (T1.5 · the central identity-api write surface)
+export {
+  PostgresSpineAdapter,
+  SpineConflictError,
+  type SpineConflictKind,
+  type SpineSqlLike,
+  type SpineIdentity,
+  type SpineWalletRow,
+  type SpineLinkedAccountRow,
+  type SpineWorldIdentityRow,
+  type SpineAuditEventInput,
+  type LinkedAccountProvider,
+} from './postgres-spine-adapter';
+
 // JWKS validator (B-1.4 · per CLAUDE.md royal decree: VALIDATOR not signer)
 export {
   JwksValidator,
