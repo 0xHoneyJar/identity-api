@@ -106,11 +106,18 @@ app.use([openapiSpec, openapiDocs] as unknown as readonly Route[])
 // ---------------------------------------------------------------------------
 // Listen. Verdict L1 defused — hostname:"0.0.0.0" so Railway healthchecks
 // reach the service. NEVER remove. Default PORT=3000 per task spec.
+//
+// Listen ONLY when this module is the program entry point. Tests import
+// this module to mount the app on an ephemeral port without triggering
+// the production listen — they call `app.listen({port: 0, ...})` then
+// `await app.stop()` themselves.
 // ---------------------------------------------------------------------------
-app.listen({
-  port: Number(process.env.PORT ?? 3000),
-  hostname: "0.0.0.0",
-})
+if (import.meta.main) {
+  app.listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+  })
+}
 
 export default app
 

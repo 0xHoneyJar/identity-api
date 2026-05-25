@@ -345,9 +345,18 @@ export class PostgresSpineAdapter implements SpinePort {
     const sql = this.sql
     const chainIds = (opts.chainIds ?? []) as string[]
     const isPrimary = opts.isPrimary ?? false
+    // Bun.SQL cannot infer an empty JS array's PG column type from context
+    // (it binds as a literal '' which PG rejects with `22P02 array value
+    // must start with "{"`). Build the PG array literal string explicitly
+    // and cast at the parameter site. The trigger 0002 verifies behavior
+    // works correctly with `chain_ids DEFAULT '{}'`, which is the same
+    // wire-shape we're feeding here.
+    const chainIdsLiteral = `{${chainIds
+      .map((id) => `"${id.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+      .join(",")}}`
     await sql`
       INSERT INTO wallet_links (wallet_address, user_id, chain_ids, is_primary)
-      VALUES (${opts.walletAddress}, ${opts.userId}, ${chainIds}, ${isPrimary})
+      VALUES (${opts.walletAddress}, ${opts.userId}, ${chainIdsLiteral}::text[], ${isPrimary})
     `
   }
 
@@ -498,9 +507,15 @@ export class PostgresSpineAdapter implements SpinePort {
     const sql = this.sql
     const actor = input.actor ?? "system"
     const userId = input.user_id ?? null
+    // Bun.SQL serializes JS objects to JSONB natively when bound to a
+    // JSONB column — pass the object directly. Using
+    // `${JSON.stringify(payload)}::jsonb` would store the SERIALIZED
+    // STRING as a JSONB string-value (not an object), so `payload->>'key'`
+    // returns null and `payload.key` is undefined on read. Verified
+    // empirically against postgres:18.1 + Bun.SQL 1.3.x.
     await sql`
       INSERT INTO audit_events (event_type, user_id, actor, payload)
-      VALUES (${input.event_type}, ${userId}, ${actor}, ${JSON.stringify(input.payload)}::jsonb)
+      VALUES (${input.event_type}, ${userId}, ${actor}, ${input.payload})
     `
   }
 }
