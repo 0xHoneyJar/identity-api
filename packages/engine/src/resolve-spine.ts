@@ -302,24 +302,24 @@ export async function setPrimaryWithAudit(
 
 /**
  * Resolve a wallet to a user_id; if not present, mint a new user and link
- * the wallet as primary. The atomic-feel "resolve-or-create" the T1.6
- * auth flow needs on /v1/auth/verify for a previously-unseen wallet.
+ * the wallet as primary. The atomic "resolve-or-create" the T1.6 auth
+ * flow consumes from /v1/auth/verify for a previously-unseen wallet.
  *
- * Not (yet) wrapped in an explicit BEGIN/COMMIT — each adapter call is its
- * own implicit transaction. A concurrent race where two requests with the
- * same fresh wallet both miss the resolve and both attempt to mint+link
- * results in:
- *   - Two `users` rows created (both succeed; PK is randomly-assigned UUID).
- *   - One linkWallet succeeds; the other raises
- *     `uq_wallet_links_active_address` uniqueness violation.
- *   - The losing caller catches and re-resolves; the now-existing wallet
- *     binds to the winner's user_id. The orphaned user_id has no wallet
- *     (resolver retry returns the winner's id; the orphan never resolves).
+ * T1.6 LBR-1 — TRANSACTIONAL POSTURE:
+ *   Callers SHOULD wrap this in `spine.withTransaction(async (tx) => { ... })`
+ *   so the read-then-write of resolveByWallet + mintUser + linkWallet
+ *   commits as one atomic unit. Concurrent verify calls for the same
+ *   fresh wallet will then serialize at the `uq_wallet_links_active_address`
+ *   uniqueness check — the loser catches the conflict (re-thrown as
+ *   `SpineConflictError(kind: 'wallet_link')`) and re-resolves to the
+ *   winner's user_id with NO partial mint visible outside the txn.
  *
- * v1 accepts the rare orphan-user-on-race tradeoff because the auth flow
- * isn't yet wired (T1.6) — the caller pattern that will need true atomicity
- * lands when T1.6 builds the verify orchestrator. Today this is a
- * convenience building block.
+ *   THIS function transparently handles the conflict-retry inside its own
+ *   logic, so the caller's contract is simple: "give me back a stable
+ *   user_id for this wallet, atomically." The caller still needs to wrap
+ *   the OUTER `withTransaction` so the ROLLBACK on conflict cleans up the
+ *   orphan mint — see the T1.6 verify route handler for the canonical
+ *   usage pattern.
  *
  * Returns `{ userId, minted }` so callers can branch on first-time vs
  * returning (e.g., T1.6 may want to issue a "welcome" event differently
@@ -339,14 +339,86 @@ export async function resolveOrMintByWallet(
     return { userId: existing, minted: false }
   }
   const userId = await mintUser(spine, { actor: opts.actor })
-  await linkWalletWithAudit(spine, {
-    userId,
-    walletAddress,
-    chainIds: opts.chainIds,
-    isPrimary: true,
-    actor: opts.actor,
-  })
+  try {
+    await linkWalletWithAudit(spine, {
+      userId,
+      walletAddress,
+      chainIds: opts.chainIds,
+      isPrimary: true,
+      actor: opts.actor,
+    })
+  } catch (err) {
+    // LBR-1 race-loser path: another concurrent verify call won the
+    // linkWallet → its txn committed first → our linkWallet raises
+    // `uq_wallet_links_active_address` (PG 23505) because the wallet is
+    // now ACTIVE-linked to the winner's user_id.
+    //
+    // Critical: we must signal the caller's wrapping txn to ROLLBACK
+    // (rolling back the orphan `users` row our mintUser just inserted),
+    // and the caller's retry must re-resolve to the winner's user_id.
+    //
+    // Two layers of contract:
+    //  (a) The caller wraps THIS function inside spine.withTransaction; on
+    //      our re-throw, that txn aborts and the orphan user is GONE
+    //      (rolled back). So at the DB layer, no orphan persists.
+    //  (b) The route handler in T1.6 catches our re-thrown error, re-runs
+    //      resolveOrMintByWallet (now in a NEW txn) — and the resolveByWallet
+    //      at the top short-circuits to the winner's user_id.
+    if (isWalletLinkConflict(err)) {
+      throw new WalletLinkRaceError(walletAddress)
+    }
+    throw err
+  }
   return { userId, minted: true }
+}
+
+/**
+ * LBR-1 race-loser signal — the linkWallet step lost a race to a
+ * concurrent verify call that also minted+linked the same wallet first.
+ *
+ * The route handler catches this, ROLLBACKs its txn (cleaning up the
+ * orphan mintUser row), and re-runs resolveOrMintByWallet — the
+ * second pass's resolveByWallet finds the winner's existing link and
+ * returns that user_id.
+ *
+ * Why a dedicated error class vs reusing SpineConflictError: the
+ * adapter's SpineConflictError is RAISED from linkAccount + claimNym
+ * (the D9 conflict paths). The wallet-link race is structurally a
+ * different conflict class — it's NOT a cross-user collision (no D9
+ * applies), it's transient concurrent-creation noise. Keeping it as a
+ * separate error class lets the route handler treat them differently:
+ *   - SpineConflictError(kind: 'wallet_link'-ish) — would be a misnomer
+ *     because the adapter currently raises this from linkAccount, not
+ *     linkWallet
+ *   - WalletLinkRaceError — explicitly "retry resolve, don't 409"
+ */
+export class WalletLinkRaceError extends Error {
+  constructor(public readonly walletAddress: string) {
+    super(
+      `[wallet-link-race] concurrent verify lost the link race for ${walletAddress}; rollback + re-resolve`,
+    )
+    this.name = "WalletLinkRaceError"
+  }
+}
+
+/** Heuristic: is this PG error from a wallet_links uniqueness violation? */
+function isWalletLinkConflict(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false
+  const e = err as { code?: unknown; message?: unknown; constraint_name?: unknown }
+  const code = e.code === "23505"
+  if (!code) return false
+  // Narrow further to the active-address index when surfaced — defends
+  // against the (rare) case where some other uniqueness violation on the
+  // same INSERT path bubbles up. Bun.SQL may surface constraint name on
+  // `.constraint_name` or in `.message` text.
+  const cn = typeof e.constraint_name === "string" ? e.constraint_name : ""
+  const msg = typeof e.message === "string" ? e.message : ""
+  return (
+    cn === "uq_wallet_links_active_address" ||
+    cn === "uq_wallet_links_one_primary_per_user" ||
+    msg.includes("uq_wallet_links_active_address") ||
+    msg.includes("uq_wallet_links_one_primary_per_user")
+  )
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────

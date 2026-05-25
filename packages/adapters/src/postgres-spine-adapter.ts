@@ -144,6 +144,20 @@ export interface SpineSqlLike {
   (strings: TemplateStringsArray, ...values: unknown[]): Promise<any>
   unsafe(query: string): Promise<unknown>
   close(): Promise<void>
+  /**
+   * Reserve a connection, run the closure inside `BEGIN`/`COMMIT`, rollback
+   * on throw. Bun.SQL's native shape — we model it explicitly so the adapter
+   * can be backed by a mock in tests.
+   *
+   * The `sql` passed to the closure is bound to the txn's connection — all
+   * its queries route through that single connection, which is what makes
+   * the BEGIN/COMMIT atomic across multiple statements (T1.6 LBR-1).
+   *
+   * Native Bun.SQL semantics: `await sql.begin(async (tx) => {...})` —
+   * resolves to the closure's return value on COMMIT, re-throws on
+   * ROLLBACK.
+   */
+  begin<T>(fn: (tx: SpineSqlLike) => Promise<T>): Promise<T>
 }
 
 // ─── adapter ────────────────────────────────────────────────────────────────
@@ -172,6 +186,49 @@ export class PostgresSpineAdapter implements SpinePort {
   /** Close the underlying connection pool. Call on graceful shutdown. */
   async close(): Promise<void> {
     await this.sql.close()
+  }
+
+  /**
+   * T1.6 LBR-1 — transactional wrapper.
+   *
+   * Reserves a single connection from the pool, runs the closure inside
+   * BEGIN/COMMIT, ROLLBACKs on throw. The closure receives a SpinePort
+   * whose all method calls route through the reserved connection, so the
+   * multi-statement read-then-write of the resolve-or-mint pattern in
+   * `resolveOrMintByWallet` becomes one atomic unit.
+   *
+   * Why this matters (the concurrency hazard this defuses):
+   *   Without a wrapping txn, two concurrent `/v1/auth/verify` calls for
+   *   the same fresh wallet can both:
+   *     1. resolveByWallet → null (no prior link)
+   *     2. mintUser → fresh user_id (each gets a different one)
+   *     3. linkWallet → one wins, the OTHER raises uniqueness-violation
+   *        from `uq_wallet_links_active_address`
+   *   leaving the loser's user_id orphaned in `users`. With the txn,
+   *   the second caller's transaction sees the WINNER's wallet_links
+   *   row at step 1 (after step 3 of the winner's txn commits), so it
+   *   short-circuits on the resolve and never mints a duplicate user.
+   *
+   * Implementation: delegates to Bun.SQL's native `.begin()`. Per Bun
+   * docs, the closure-sql is bound to a single reserved connection;
+   * throw → ROLLBACK + re-throw; clean return → COMMIT.
+   *
+   * The transactional inner adapter is a fresh `PostgresSpineAdapter`
+   * constructed with the txn's `sql` handle — the inner adapter doesn't
+   * need its own pool because the handle IS the connection. We do NOT
+   * close the inner adapter (no `await inner.close()`) — closing it
+   * would close the txn's connection mid-transaction.
+   */
+  async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
+    return this.sql.begin(async (txSql) => {
+      // Wrap the txn-bound sql handle in a fresh adapter. The inner adapter
+      // SHARES the prototype methods with `this`, but reads/writes route
+      // through `txSql` (which is bound to the BEGUN connection) rather
+      // than the pool. The inner adapter MUST NOT outlive the closure —
+      // its sql handle is invalidated when the txn ends.
+      const inner = new PostgresSpineAdapter(txSql)
+      return fn(inner)
+    })
   }
 
   // ── reads (FR-R1..R4) ─────────────────────────────────────────────────────
@@ -576,6 +633,17 @@ export class PostgresSpineAdapter implements SpinePort {
    *     32-byte entropy that collision is cryptographically negligible —
    *     we surface the PG error rather than retry, matching the rest of the
    *     adapter's posture (let unexpected failures hit the 500 path).
+   *
+   * T1.6 LBR-2 — `messageBuilder` closure path:
+   *   When the caller supplies `messageBuilder` instead of `message`, the
+   *   adapter generates the nonce first, invokes the closure to construct
+   *   the canonical message embedding the nonce (EIP-4361 SIWE pattern),
+   *   then INSERTs the row in ONE statement with the resolved message
+   *   stored verbatim. This eliminates the chicken-and-egg between "nonce
+   *   needs to be in the SIWE message" and "message is INSERTed alongside
+   *   the nonce" without resorting to a placeholder + follow-up UPDATE
+   *   (which would leave a brief window where `message` and `nonce` disagree
+   *   inside the row — a forensic hazard for nonce_replay analysis).
    */
   async mintNonce(input: MintNonceInput): Promise<MintNonceResult> {
     const sql = this.sql
@@ -583,13 +651,39 @@ export class PostgresSpineAdapter implements SpinePort {
     const safeTtl = ttlSec < 0 ? 0 : ttlSec
     const nonce = randomBytes(NONCE_BYTES).toString("base64url")
     const walletAddress = input.walletAddress ?? null
+    // T1.6 LBR-2: exactly one of message / messageBuilder MUST be set.
+    // Supplying both is a caller bug — there is no "fallback" relationship.
+    // Supplying neither is a caller bug — the row's `message` column is NOT NULL.
+    const hasMessage = typeof input.message === "string"
+    const hasBuilder = typeof input.messageBuilder === "function"
+    if (hasMessage && hasBuilder) {
+      throw new Error(
+        "PostgresSpineAdapter.mintNonce: supply EXACTLY ONE of `message` or `messageBuilder` (got both)",
+      )
+    }
+    if (!hasMessage && !hasBuilder) {
+      throw new Error(
+        "PostgresSpineAdapter.mintNonce: supply EXACTLY ONE of `message` or `messageBuilder` (got neither)",
+      )
+    }
+    const resolvedMessage = hasBuilder
+      ? (input.messageBuilder as (n: string) => string)(nonce)
+      : (input.message as string)
+    if (typeof resolvedMessage !== "string" || resolvedMessage.length === 0) {
+      // Defense-in-depth: a buggy closure that returns "" or non-string
+      // would otherwise insert an empty / NULL-cast string into the
+      // signed-message column. Refuse loudly.
+      throw new Error(
+        "PostgresSpineAdapter.mintNonce: resolved message is empty or non-string",
+      )
+    }
     const rows = (await sql`
       INSERT INTO auth_nonces (nonce, wallet_address, scheme, message, expires_at)
       VALUES (
         ${nonce},
         ${walletAddress},
         ${input.scheme},
-        ${input.message},
+        ${resolvedMessage},
         NOW() + (${safeTtl}::int * INTERVAL '1 second')
       )
       RETURNING expires_at
@@ -604,7 +698,7 @@ export class PostgresSpineAdapter implements SpinePort {
       expiresAtRaw instanceof Date
         ? expiresAtRaw.toISOString()
         : new Date(expiresAtRaw).toISOString()
-    return { nonce, expires_at: expiresAt }
+    return { nonce, expires_at: expiresAt, message: resolvedMessage }
   }
 
   /**

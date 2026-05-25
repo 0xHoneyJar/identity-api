@@ -94,24 +94,71 @@ export interface SpineAuditEvent {
  */
 export type SpineNonceScheme = "siwe" | "eip191"
 
-/** Input shape for `mintNonce`. TTL defaults to 300s server-side. */
+/**
+ * Input shape for `mintNonce`. TTL defaults to 300s server-side.
+ *
+ * Exactly ONE of `message` or `messageBuilder` MUST be supplied:
+ *
+ *   - `message` (T1.4 shape): the caller has already constructed the
+ *     full string the wallet will sign — adapter stores it verbatim.
+ *     Use this for EIP-191 payloads whose body does NOT need to embed
+ *     the nonce (e.g., `"identity-api login: <pre-known-text>"`).
+ *
+ *   - `messageBuilder` (T1.6 LBR-2 shape): the caller hands a closure
+ *     `(nonce: string) => string`. The adapter generates the random
+ *     nonce, invokes the closure to construct the canonical message
+ *     embedding the nonce, then INSERTs both atomically (1 write, no
+ *     follow-up UPDATE). Use this for SIWE / EIP-4361 messages — they
+ *     contain the nonce verbatim, so a placeholder-then-update would
+ *     leave a short window where the row's `message` and `nonce` are
+ *     out of sync. The closure pattern eliminates that window.
+ *
+ * If BOTH are supplied, the adapter throws — there is no "fallback" or
+ * "override" relationship; supplying both is a bug.
+ */
 export interface MintNonceInput {
   /** Signature scheme the caller will use to sign the returned `message`. */
   readonly scheme: SpineNonceScheme
-  /** The exact string the wallet will sign. Stored verbatim for replay-defense. */
-  readonly message: string
+  /**
+   * The exact string the wallet will sign. Stored verbatim for
+   * replay-defense. Exactly ONE of `message` / `messageBuilder` MUST be set.
+   */
+  readonly message?: string
+  /**
+   * Closure that receives the freshly-minted nonce and returns the
+   * canonical message embedding it (EIP-4361 SIWE pattern). Exactly ONE of
+   * `message` / `messageBuilder` MUST be set. See type docstring for why
+   * this exists.
+   */
+  readonly messageBuilder?: (nonce: string) => string
   /** Optional wallet hint (NULLable until verify per SDD §3.2). */
   readonly walletAddress?: string | null
   /** Override server default (300s) only when test/operator requires it. */
   readonly ttlSec?: number
 }
 
-/** Mint result — the random nonce string + the absolute expiry. */
+/**
+ * Mint result — the random nonce string + the absolute expiry + the
+ * resolved message string that was stored in the row.
+ *
+ * When the caller supplied `messageBuilder`, `message` is the closure's
+ * output (so the caller doesn't have to re-run its own message logic to
+ * recover it). When the caller supplied `message` directly, the adapter
+ * echoes it back verbatim (no transformation). The route handler at
+ * `/v1/auth/challenge` returns this exact string to the client — that's
+ * the canonical, server-side-of-record string the wallet must sign.
+ */
 export interface MintNonceResult {
   /** Base64URL-encoded 32 bytes from a CSPRNG (43 chars, URL-safe). */
   readonly nonce: string
   /** Absolute expiry timestamp (ISO 8601, UTC). */
   readonly expires_at: string
+  /**
+   * The exact message string stored on the row — what the wallet must sign.
+   * For EIP-191: the caller's pre-built payload. For SIWE: the closure's
+   * output with the freshly-minted nonce embedded.
+   */
+  readonly message: string
 }
 
 /** Input shape for `consumeNonce`. */
@@ -201,6 +248,43 @@ export interface SpinePort {
    * probability is cryptographically negligible).
    */
   mintNonce(input: MintNonceInput): Promise<MintNonceResult>
+
+  /**
+   * Run a closure inside a PG transaction (T1.6 LBR-1 / NFR-7 strict
+   * atomicity).
+   *
+   * The closure receives a SpinePort whose underlying SQL handle is the
+   * transaction's reserved connection — every method call on it routes
+   * through that single connection so the writes commit or rollback as
+   * one unit.
+   *
+   * Why this exists: T1.5's `resolveOrMintByWallet` is NOT atomic when
+   * called naively against the top-level spine — two concurrent
+   * `/v1/auth/verify` calls for the same fresh wallet can BOTH miss the
+   * resolveByWallet read, BOTH proceed to mintUser, then exactly one
+   * wins linkWallet (the partial-unique index catches the loser) leaving
+   * the loser's user_id ORPHANED. Wrapping the resolve+mint+link in a
+   * transaction collapses the race: the second caller sees a CONFLICT
+   * (we surface it as a `wallet_link` SpineConflictError) and re-resolves
+   * to the winner's id, with NO partial mint visible outside the txn.
+   *
+   * Implementation contract:
+   *   - On `fn` return: COMMIT and return the value.
+   *   - On `fn` throw: ROLLBACK and re-throw.
+   *   - The transactional SpinePort handed to `fn` MUST NOT be retained
+   *     past the closure's return (it's bound to a connection that gets
+   *     released). Callers that ignore this will see "tried to use a
+   *     released connection" errors from the underlying driver.
+   *   - Nesting: calling `withTransaction` from inside a `withTransaction`
+   *     is undefined behavior in v1; we don't use SAVEPOINTs yet. The
+   *     T1.6 use case is single-level (verify orchestrator).
+   *
+   * v1 scope: ALL writes through the inner `spine` happen in the same
+   * txn. Audit-event writes inside the closure are also part of the txn
+   * (i.e., on ROLLBACK the audit row is also rolled back — consistent
+   * with "audit reflects committed state" per NFR-5).
+   */
+  withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T>
 
   /**
    * Atomically consume a nonce.

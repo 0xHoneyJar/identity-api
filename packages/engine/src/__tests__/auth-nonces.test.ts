@@ -48,10 +48,19 @@ function buildMockSpine(): MockSpine {
     // ── nonce methods: capture args + return overridable hooks ──
     async mintNonce(input: MintNonceInput): Promise<MintNonceResult> {
       trace.push({ method: "mintNonce", args: input })
+      // Resolve message via the same exactly-one rule the adapter enforces,
+      // so the trace + return shape mirror what callers would see in prod.
+      const resolved =
+        typeof input.message === "string"
+          ? input.message
+          : typeof input.messageBuilder === "function"
+            ? input.messageBuilder("fixture-nonce-abc")
+            : ""
       return (
         m.mintNonceReturns ?? {
           nonce: "fixture-nonce-abc",
           expires_at: "2026-05-24T00:05:00.000Z",
+          message: resolved,
         }
       )
     },
@@ -91,6 +100,12 @@ function buildMockSpine(): MockSpine {
     async setPrimary() {
       return true
     },
+    // T1.6 LBR-1: pass-through transactional stub (this test doesn't
+    // exercise concurrent races — the closure gets THIS mock, not a
+    // forked instance).
+    async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
+      return fn(m)
+    },
   }
   return m
 }
@@ -110,6 +125,7 @@ describe("auth-nonces.ts engine orchestrators (T1.4)", () => {
     spine.mintNonceReturns = {
       nonce: "test-nonce-xyz",
       expires_at: "2026-05-24T00:05:00.000Z",
+      message: "SIWE message text",
     }
     const result = await mintAuthNonce(spine, {
       scheme: "siwe",
@@ -119,6 +135,7 @@ describe("auth-nonces.ts engine orchestrators (T1.4)", () => {
     // Return shape is the adapter's verbatim MintNonceResult.
     expect(result.nonce).toBe("test-nonce-xyz")
     expect(result.expires_at).toBe("2026-05-24T00:05:00.000Z")
+    expect(result.message).toBe("SIWE message text")
     // The mintNonce call goes through with walletAddress (the engine
     // explicitly normalizes undefined → null so the port input is well-typed).
     expect(spine.trace[0]).toEqual({

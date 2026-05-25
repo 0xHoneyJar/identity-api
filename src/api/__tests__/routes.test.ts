@@ -90,6 +90,7 @@ function buildMockSpine(): MockSpine {
       return {
         nonce: "test-mock-nonce",
         expires_at: "2026-05-24T00:05:00.000Z",
+        message: "test-mock-message",
       }
     },
     async consumeNonce() {
@@ -98,6 +99,10 @@ function buildMockSpine(): MockSpine {
         message: "test-mock-message",
         wallet_address: null,
       }
+    },
+    // T1.6 LBR-1: pass-through transactional stub.
+    async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
+      return fn(m)
     },
   }
   return m

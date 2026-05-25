@@ -49,7 +49,7 @@ interface MockSpine extends SpinePort {
   setPrimaryReturns?: boolean
   // T1.4 nonce mock hooks (not exercised by resolve-spine tests, but the
   // SpinePort interface requires the methods to exist).
-  mintNonceReturns?: { nonce: string; expires_at: string }
+  mintNonceReturns?: { nonce: string; expires_at: string; message: string }
   consumeNonceReturns?:
     | { ok: true; message: string; wallet_address: string | null }
     | { ok: false; reason: "unknown" | "used" | "expired" | "scheme_mismatch" }
@@ -103,10 +103,17 @@ function buildMockSpine(): MockSpine {
     },
     async mintNonce(input) {
       trace.push({ method: "mintNonce", args: input })
+      const resolved =
+        typeof input.message === "string"
+          ? input.message
+          : typeof input.messageBuilder === "function"
+            ? input.messageBuilder("test-nonce-fixture")
+            : "test-message-fixture"
       return (
         m.mintNonceReturns ?? {
           nonce: "test-nonce-fixture",
           expires_at: "2026-05-24T00:05:00.000Z",
+          message: resolved,
         }
       )
     },
@@ -119,6 +126,10 @@ function buildMockSpine(): MockSpine {
           wallet_address: null,
         }
       )
+    },
+    // T1.6 LBR-1: pass-through transactional stub.
+    async withTransaction<T>(fn: (spine: SpinePort) => Promise<T>): Promise<T> {
+      return fn(m)
     },
   }
   return m

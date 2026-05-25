@@ -45,11 +45,22 @@ import type { AuditActor } from "./resolve-spine"
  * responsibility to build (SIWE builder in T1.6 for the EIP-4361 path;
  * EIP-191 builder for the legacy path). The engine layer doesn't choose
  * scheme or compose message text — it just persists what the caller hands
- * over and audits the mint.
+ * over (or what its closure produces) and audits the mint.
+ *
+ * Exactly ONE of `message` or `messageBuilder` MUST be supplied — see
+ * `MintNonceInput` in spine.port.ts for the rationale (T1.6 LBR-2: the
+ * SIWE chicken-and-egg problem is solved by letting the adapter generate
+ * the nonce, hand it to the closure, and INSERT both in one statement).
  */
 export interface MintAuthNonceOpts {
   readonly scheme: SpineNonceScheme
-  readonly message: string
+  /** Direct message string (EIP-191 path that doesn't need to embed the nonce). */
+  readonly message?: string
+  /**
+   * Closure receiving the freshly-minted nonce, returning the canonical
+   * message embedding it (SIWE / EIP-4361 path). T1.6 LBR-2.
+   */
+  readonly messageBuilder?: (nonce: string) => string
   /** Optional wallet hint stored on the row (NULLable per SDD §3.2). */
   readonly walletAddress?: string | null
   /** Override default 300s only when test/operator requires. */
@@ -83,9 +94,24 @@ export async function mintAuthNonce(
   spine: SpinePort,
   opts: MintAuthNonceOpts,
 ): Promise<MintNonceResult> {
+  // Caller-side guard mirrors the adapter's: exactly one of message /
+  // messageBuilder. We catch this here too so the failure mode is
+  // attributed to the engine seam (not the adapter), which is the layer
+  // the auth route handler is talking to.
+  const hasMessage = typeof opts.message === "string"
+  const hasBuilder = typeof opts.messageBuilder === "function"
+  if (hasMessage === hasBuilder) {
+    throw new Error(
+      `mintAuthNonce: supply EXACTLY ONE of 'message' or 'messageBuilder' (got ${
+        hasMessage && hasBuilder ? "both" : "neither"
+      })`,
+    )
+  }
   const result = await spine.mintNonce({
     scheme: opts.scheme,
-    message: opts.message,
+    // Adapter takes either path; we forward whichever the caller provided.
+    message: hasMessage ? opts.message : undefined,
+    messageBuilder: hasBuilder ? opts.messageBuilder : undefined,
     walletAddress: opts.walletAddress ?? null,
     ttlSec: opts.ttlSec,
   })

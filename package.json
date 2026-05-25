@@ -33,6 +33,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
+    "viem": "^2.43.4",
     "zod": "^4.4.3"
   }
 }
