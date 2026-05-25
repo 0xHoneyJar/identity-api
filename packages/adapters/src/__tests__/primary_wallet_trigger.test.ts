@@ -166,7 +166,11 @@ describe.skipIf(!TEST_DATABASE_URL)("0002 primary-wallet trigger (T1.3)", () => 
       const manipulations = triggers.map((t) => t.event_manipulation).sort()
       expect(manipulations).toEqual(["INSERT", "UPDATE"])
       for (const t of triggers) {
-        expect(t.action_timing).toBe("AFTER")
+        // BEFORE — operator curation 2026-05-24 (T1.3 review gate). SDD §3.2
+        // amended from AFTER to make single-statement atomic swap actually
+        // work; AFTER let the partial-unique fire before the trigger could
+        // demote. See trigger SQL header for the full reconciliation.
+        expect(t.action_timing).toBe("BEFORE")
         expect(t.event_object_table).toBe("wallet_links")
       }
 
@@ -481,7 +485,18 @@ describe.skipIf(!TEST_DATABASE_URL)("0002 primary-wallet trigger (T1.3)", () => 
   // This is the SDD's "hard guarantee" surfacing. The two tests document
   // both raise paths so T1.5 resolve logic has executable contract docs.
 
-  it("inserting a SECOND primary directly with is_primary=TRUE raises a uniqueness violation (partial-unique from 0001, trigger does not rescue this path)", async () => {
+  it("single-statement INSERT of a SECOND primary succeeds atomically — BEFORE trigger demotes the prior first, then partial-unique sees a consistent state", async () => {
+    // Operator curation 2026-05-24 flipped the trigger to BEFORE (SDD §3.2
+    // amended). With BEFORE, a single-statement INSERT of a second primary
+    // for the same user no longer raises — the trigger runs first and
+    // demotes the prior primary, so the partial-unique sees only the new
+    // tuple as primary and is satisfied. This test ASSERTS the atomic
+    // behavior the SDD prose has always claimed.
+    //
+    // The partial-unique still hard-guarantees CONCURRENT races (two
+    // simultaneous transactions setting conflicting primaries serialize on
+    // the unique index slot). That class is hard to exercise deterministically
+    // in a unit test; documented but not asserted here.
     const sql = new SQL(databaseUrl)
     try {
       const userRow = (await sql`
@@ -494,33 +509,41 @@ describe.skipIf(!TEST_DATABASE_URL)("0002 primary-wallet trigger (T1.3)", () => 
         VALUES ('0xhard1', ${userId}, TRUE)
       `
 
-      // Now try to insert ANOTHER primary directly. The partial-unique
-      // `uq_wallet_links_one_primary_per_user` (added in 0001) catches this
-      // BEFORE the AFTER trigger gets a chance to demote — by design. The
-      // SDD calls this the "hard guarantee"; the trigger is convenience for
-      // the caller-orchestrated UPDATE path tested above.
-      let threw = false
-      let message = ""
-      try {
-        await sql`
-          INSERT INTO wallet_links (wallet_address, user_id, is_primary)
-          VALUES ('0xhard2', ${userId}, TRUE)
-        `
-      } catch (err) {
-        threw = true
-        message = String(err)
-      }
-      expect(threw).toBe(true)
-      expect(message.toLowerCase()).toContain("uq_wallet_links_one_primary_per_user")
+      // Single-statement INSERT of a second primary. Trigger demotes hard1
+      // BEFORE the partial-unique check on hard2 — INSERT succeeds.
+      await sql`
+        INSERT INTO wallet_links (wallet_address, user_id, is_primary)
+        VALUES ('0xhard2', ${userId}, TRUE)
+      `
 
-      // First primary still stands.
+      // hard1 demoted (still active, just not primary anymore).
       const first = (await sql`
-        SELECT is_primary FROM wallet_links
+        SELECT is_primary, unlinked_at FROM wallet_links
          WHERE wallet_address = '0xhard1' AND user_id = ${userId}
-      `) as Array<{ is_primary: boolean }>
-      expect(first[0]!.is_primary).toBe(true)
+      `) as Array<{ is_primary: boolean; unlinked_at: string | null }>
+      expect(first[0]!.is_primary).toBe(false)
+      expect(first[0]!.unlinked_at).toBeNull()
 
-      // Cleanup — '0xhard2' was rolled back implicitly by the failed INSERT.
+      // hard2 is the new primary.
+      const second = (await sql`
+        SELECT is_primary FROM wallet_links
+         WHERE wallet_address = '0xhard2' AND user_id = ${userId}
+      `) as Array<{ is_primary: boolean }>
+      expect(second[0]!.is_primary).toBe(true)
+
+      // users.primary_wallet mirrored to hard2.
+      const user = (await sql`
+        SELECT primary_wallet FROM users WHERE user_id = ${userId}
+      `) as Array<{ primary_wallet: string }>
+      expect(user[0]!.primary_wallet).toBe("0xhard2")
+
+      // FR-R5 invariant: exactly one active primary per user.
+      const count = (await sql`
+        SELECT COUNT(*)::int AS n FROM wallet_links
+         WHERE user_id = ${userId} AND is_primary = TRUE AND unlinked_at IS NULL
+      `) as Array<{ n: number }>
+      expect(count[0]!.n).toBe(1)
+
       await sql`DELETE FROM wallet_links WHERE user_id = ${userId}`
       await sql`DELETE FROM users WHERE user_id = ${userId}`
     } finally {
@@ -528,14 +551,16 @@ describe.skipIf(!TEST_DATABASE_URL)("0002 primary-wallet trigger (T1.3)", () => 
     }
   })
 
-  it("UPDATE flipping a non-primary wallet to is_primary=TRUE while another primary exists ALSO raises (AFTER trigger does not rescue)", async () => {
+  it("single-statement UPDATE flipping a non-primary wallet to is_primary=TRUE succeeds atomically — BEFORE trigger demotes prior; SDD-prose 'atomic swap' delivered", async () => {
+    // The SDD-prose's "atomic swap" claim now HOLDS with BEFORE timing.
+    // Operator curation 2026-05-24 flipped the trigger; SDD §3.2 amended.
+    // A single UPDATE to set is_primary=TRUE on a non-primary row, while
+    // another row is primary for the same user, demotes the prior first
+    // (trigger runs BEFORE the partial-unique check) and the UPDATE
+    // succeeds. T1.5 resolve logic can use the single-statement promote
+    // pattern; the two-statement workflow is no longer required.
     const sql = new SQL(databaseUrl)
     try {
-      // This case is the SDD-prose's "atomic swap" claim. The SQL-as-written
-      // does NOT deliver it — empirically verified during T1.3. The
-      // partial-unique fires on the new tuple version before the AFTER
-      // trigger gets a chance to demote the prior primary. Documented in
-      // the build notes (SDD discrepancy section); flagged to operator.
       const userRow = (await sql`
         INSERT INTO users DEFAULT VALUES RETURNING user_id
       `) as Array<{ user_id: string }>
@@ -550,31 +575,41 @@ describe.skipIf(!TEST_DATABASE_URL)("0002 primary-wallet trigger (T1.3)", () => 
         VALUES ('0xupd2', ${userId}, FALSE)
       `
 
-      let threw = false
-      let message = ""
-      try {
-        await sql`
-          UPDATE wallet_links SET is_primary = TRUE
-           WHERE wallet_address = '0xupd2' AND user_id = ${userId}
-        `
-      } catch (err) {
-        threw = true
-        message = String(err)
-      }
-      expect(threw).toBe(true)
-      expect(message.toLowerCase()).toContain("uq_wallet_links_one_primary_per_user")
+      // Single-statement promote. With BEFORE, the trigger demotes upd1
+      // first, then the partial-unique check on upd2 sees a consistent
+      // state and succeeds.
+      await sql`
+        UPDATE wallet_links SET is_primary = TRUE
+         WHERE wallet_address = '0xupd2' AND user_id = ${userId}
+      `
 
-      // Prior primary stands; '0xupd2' is unchanged.
+      // upd1 demoted, still active.
       const upd1 = (await sql`
-        SELECT is_primary FROM wallet_links
+        SELECT is_primary, unlinked_at FROM wallet_links
          WHERE wallet_address = '0xupd1' AND user_id = ${userId}
-      `) as Array<{ is_primary: boolean }>
-      expect(upd1[0]!.is_primary).toBe(true)
+      `) as Array<{ is_primary: boolean; unlinked_at: string | null }>
+      expect(upd1[0]!.is_primary).toBe(false)
+      expect(upd1[0]!.unlinked_at).toBeNull()
+
+      // upd2 is the new primary.
       const upd2 = (await sql`
         SELECT is_primary FROM wallet_links
          WHERE wallet_address = '0xupd2' AND user_id = ${userId}
       `) as Array<{ is_primary: boolean }>
-      expect(upd2[0]!.is_primary).toBe(false)
+      expect(upd2[0]!.is_primary).toBe(true)
+
+      // Mirror updated.
+      const user = (await sql`
+        SELECT primary_wallet FROM users WHERE user_id = ${userId}
+      `) as Array<{ primary_wallet: string }>
+      expect(user[0]!.primary_wallet).toBe("0xupd2")
+
+      // FR-R5 invariant: exactly one active primary per user.
+      const count = (await sql`
+        SELECT COUNT(*)::int AS n FROM wallet_links
+         WHERE user_id = ${userId} AND is_primary = TRUE AND unlinked_at IS NULL
+      `) as Array<{ n: number }>
+      expect(count[0]!.n).toBe(1)
 
       await sql`DELETE FROM wallet_links WHERE user_id = ${userId}`
       await sql`DELETE FROM users WHERE user_id = ${userId}`

@@ -19,15 +19,26 @@
 --       a) demotes any other ACTIVE primary for the same user to FALSE, and
 --       b) mirrors the new primary onto users.primary_wallet (denorm pointer).
 --
--- AFTER vs BEFORE: SDD prescribes AFTER. Two implications worth naming:
---   * The new row's own write happens BEFORE the trigger; the partial-unique
---     check therefore fires against a state where only this row would have
---     primary set for this user (the trigger then demotes any prior). For the
---     caller-orchestrated workflow this works as designed.
---   * For the naive single-statement "two primaries" attempt the partial-unique
---     RAISES first — the trigger never runs. That's a feature, not a bug: the
---     hard guarantee is the contract; the trigger only smooths the legitimate
---     swap path.
+-- AFTER → BEFORE (operator curation 2026-05-24, T1.3 review gate):
+--   SDD §3.2 originally prescribed `AFTER INSERT OR UPDATE OF is_primary` and
+--   its prose claimed the trigger made primary-swap "atomic." Empirical
+--   verification during T1.3 build (10 tests against postgres:18.1) showed
+--   AFTER does NOT deliver that claim: with AFTER, PG writes the new tuple,
+--   the partial-unique `uq_wallet_links_one_primary_per_user` checks it
+--   BEFORE the AFTER trigger fires, and a naive
+--   `UPDATE wallet_links SET is_primary=TRUE WHERE wallet_address=B`
+--   (while A is also primary for the same user) RAISES `duplicate key value
+--   violates unique constraint` — the trigger's demote pass never runs.
+--   Operator chose BEFORE + amend SDD §3.2 to match. With BEFORE:
+--     * The trigger fires BEFORE PG checks the partial-unique on NEW. The
+--       demote pass clears any prior primary for the same user first; the
+--       constraint then sees a unique state and is satisfied. Single-statement
+--       `UPDATE … is_primary=TRUE` and single-INSERT-of-second-primary both
+--       work atomically — the SDD prose's claim now holds.
+--     * The partial-unique remains the structural hard guarantee against
+--       concurrent races (two simultaneous transactions trying to set
+--       conflicting primaries serialize through the unique index slot —
+--       one wins, the other gets a uniqueness violation and must retry).
 --
 -- OF is_primary clause: scopes the UPDATE side of the trigger to writes that
 -- actually touch `is_primary`. Pure verified_at / chain_ids updates do not
@@ -67,7 +78,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_sync_primary_wallet
-    AFTER INSERT OR UPDATE OF is_primary ON wallet_links
+    BEFORE INSERT OR UPDATE OF is_primary ON wallet_links
     FOR EACH ROW EXECUTE FUNCTION sync_primary_wallet();
 
 COMMIT;
