@@ -46,3 +46,44 @@ export {
   type ConsumeNonceInput,
   type ConsumeNonceResult,
 } from './spine.port';
+
+// ─── Federation client ports (T2.1 · bead arrakis-ok93) ─────────────────────
+//
+// Per PRD v3.0 §4.5 (FR-P1..P4) + SDD §5.4: identity-api federates the
+// `/v1/profile` read-time compose (T2.3) over three upstream buildings —
+// inventory-api, score-api, mibera-codex. These are READ-ONLY federation
+// client surfaces; the data lives upstream (no-embed invariant FR-P3).
+//
+// Each port specifies the contract; HTTP adapter impls live in
+// @freeside-auth/adapters; T2.2 (compose orchestrator) consumes the ports
+// via dependency injection.
+
+// Shared infrastructure
+export {
+  type PortFetchLike,
+  type PortCallOpts,
+} from './port-opts';
+export {
+  type FederationFailureKind,
+  type FederationFailure,
+  type FederationResult,
+} from './federation-result';
+
+// inventory-api federation port — wallet holdings (Mibera primary).
+export {
+  type InventoryPort,
+  type InventoryGetHoldingsInput,
+} from './inventory.port';
+
+// score-api federation port — V8 numeric scoring + tier surfaces.
+export {
+  type ScorePort,
+  type ScoreGetScoreInput,
+} from './score.port';
+
+// mibera-codex federation port — per-tokenId 7-dim Mibera profile.
+export {
+  type CodexPort,
+  type CodexGetMiberaTraitsInput,
+  type CodexMiberaEntry,
+} from './codex.port';

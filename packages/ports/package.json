@@ -8,7 +8,12 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./tenant-adapter": "./src/tenant-adapter.port.ts"
+    "./tenant-adapter": "./src/tenant-adapter.port.ts",
+    "./federation-result": "./src/federation-result.ts",
+    "./port-opts": "./src/port-opts.ts",
+    "./inventory": "./src/inventory.port.ts",
+    "./score": "./src/score.port.ts",
+    "./codex": "./src/codex.port.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
