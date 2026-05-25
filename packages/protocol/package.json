@@ -20,7 +20,12 @@
     "./credential-dynamic.schema.json": "./src/credential-dynamic.schema.json",
     "./resolve-result": "./src/resolve-result.ts",
     "./resolve-result.schema.json": "./src/resolve-result.schema.json",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./api": "./src/api/index.ts",
+    "./api/auth": "./src/api/auth.ts",
+    "./api/resolve": "./src/api/resolve.ts",
+    "./api/profile": "./src/api/profile.ts",
+    "./api/link": "./src/api/link.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
