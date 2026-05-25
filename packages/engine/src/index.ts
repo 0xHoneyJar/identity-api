@@ -89,3 +89,15 @@ export {
   type CircuitBreakerOpts,
   type CircuitBreakerState,
 } from './circuit-breaker';
+
+// Compose orchestrator (T2.2 · read-time fan-out for /v1/profile).
+// The brain of FR-P1/P2/P3/D6/D8. Takes a wallet or user_id, resolves the
+// spine identity, fans out to inventory + score + codex with per-source
+// AbortController + circuit-breaker, returns a sealed ProfileResp with
+// degraded[] populated for any source that missed.
+export {
+  composeProfile,
+  type ComposeProfileDeps,
+  type ComposeProfileOpts,
+  type ComposeProfileInput,
+} from './compose-profile';
