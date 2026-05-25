@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loa.dev/schemas/freeside-auth/federation/score.schema.json",
+  "title": "Score federation contract — GET /v1/wallets/:address",
+  "description": "Wire shapes for the score-api building's wallet-profile endpoint, consumed by identity-api's /v1/profile read-time compose (T2.3). Mirrors WalletProfile from ~/Documents/GitHub/score-api/src/types/api.types.ts:25-98. JSON-Schema sibling of packages/protocol/src/api/federation/score.ts. additionalProperties: true so score-api forward-compatible field additions don't reject; consumers tightening their type derivation only see declared fields.",
+  "$defs": {
+    "CrowdTier": {
+      "type": "string",
+      "enum": ["curious", "initiated", "devoted", "front_row", "all_night", "eternal"]
+    },
+    "EliteTier": {
+      "type": "string",
+      "enum": ["godfather", "veteran"]
+    },
+    "TrustClassification": {
+      "type": "string",
+      "enum": ["normal", "banned_robotic", "banned_cluster", "flagged_single_factor", "flagged_burst"]
+    },
+    "WalletProfile": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "wallet",
+        "og_score", "nft_score", "onchain_score",
+        "og_score_raw", "nft_score_raw", "onchain_score_raw",
+        "first_activity", "last_activity",
+        "og_factor_count", "nft_factor_count", "onchain_factor_count",
+        "trust_filter", "trust_coefficient", "trust_classification", "flagged_for_review",
+        "og_breadth", "nft_breadth", "onchain_breadth",
+        "og_breadth_multiplier", "nft_breadth_multiplier", "onchain_breadth_multiplier",
+        "og_rank", "nft_rank", "onchain_rank", "overall_rank", "total_ranked_wallets",
+        "og_percentile", "nft_percentile", "onchain_percentile", "overall_percentile",
+        "combined_score",
+        "crowd_tier", "crowd_tier_display", "elite_tier", "elite_tier_display",
+        "points_to_next_crowd_tier", "next_crowd_tier_display",
+        "badge_count", "pioneer_badge_count"
+      ],
+      "properties": {
+        "wallet": { "type": "string" },
+        "og_score": { "type": ["number", "null"] },
+        "nft_score": { "type": ["number", "null"] },
+        "onchain_score": { "type": ["number", "null"] },
+        "og_score_raw": { "type": ["number", "null"] },
+        "nft_score_raw": { "type": ["number", "null"] },
+        "onchain_score_raw": { "type": ["number", "null"] },
+        "first_activity": { "type": ["string", "null"] },
+        "last_activity": { "type": ["string", "null"] },
+        "og_factor_count": { "type": ["number", "null"] },
+        "nft_factor_count": { "type": ["number", "null"] },
+        "onchain_factor_count": { "type": ["number", "null"] },
+        "trust_filter": { "type": "number" },
+        "trust_coefficient": { "type": "number" },
+        "trust_classification": { "$ref": "#/$defs/TrustClassification" },
+        "flagged_for_review": { "type": "boolean" },
+        "og_breadth": { "type": ["number", "null"] },
+        "nft_breadth": { "type": ["number", "null"] },
+        "onchain_breadth": { "type": ["number", "null"] },
+        "og_breadth_multiplier": { "type": ["number", "null"] },
+        "nft_breadth_multiplier": { "type": ["number", "null"] },
+        "onchain_breadth_multiplier": { "type": ["number", "null"] },
+        "og_rank": { "type": ["number", "null"] },
+        "nft_rank": { "type": ["number", "null"] },
+        "onchain_rank": { "type": ["number", "null"] },
+        "overall_rank": { "type": ["number", "null"] },
+        "total_ranked_wallets": { "type": ["number", "null"] },
+        "og_percentile": { "type": ["number", "null"] },
+        "nft_percentile": { "type": ["number", "null"] },
+        "onchain_percentile": { "type": ["number", "null"] },
+        "overall_percentile": { "type": ["number", "null"] },
+        "combined_score": { "type": ["number", "null"] },
+        "crowd_tier": { "oneOf": [{ "$ref": "#/$defs/CrowdTier" }, { "type": "null" }] },
+        "crowd_tier_display": { "type": ["string", "null"] },
+        "elite_tier": { "oneOf": [{ "$ref": "#/$defs/EliteTier" }, { "type": "null" }] },
+        "elite_tier_display": { "type": ["string", "null"] },
+        "points_to_next_crowd_tier": { "type": ["number", "null"] },
+        "next_crowd_tier_display": { "type": ["string", "null"] },
+        "badge_count": { "type": ["number", "null"] },
+        "pioneer_badge_count": { "type": ["number", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loa.dev/schemas/freeside-auth/federation/inventory.schema.json",
+  "title": "Inventory federation contract — GET /v1/holdings/:wallet",
+  "description": "Wire shapes for the inventory-api building's holdings endpoint, consumed by identity-api's /v1/profile read-time compose (T2.3). Mirrors HoldingsResponse from ~/Documents/GitHub/inventory-api/types.ts. JSON-Schema sibling of packages/protocol/src/api/federation/inventory.ts.",
+  "$defs": {
+    "InventoryAttribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trait_type", "value"],
+      "properties": {
+        "trait_type": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "InventoryCompleteness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_block", "holder_count", "source", "complete"],
+      "properties": {
+        "as_of_block": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 is a sentinel for 'no block reached' (degraded mode)."
+        },
+        "holder_count": { "type": "integer", "minimum": 0 },
+        "source": { "type": "string", "const": "sonar" },
+        "complete": {
+          "oneOf": [
+            { "type": "boolean", "const": true },
+            { "type": "string", "const": "degraded" }
+          ]
+        }
+      }
+    },
+    "InventoryContractHolding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractAddress", "chainId", "tokenCount", "tokenIds"],
+      "properties": {
+        "contractAddress": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        },
+        "chainId": { "type": "integer", "minimum": 1 },
+        "tokenCount": { "type": "integer", "minimum": 0 },
+        "tokenIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Currently empty for live mode pending the sonar per-token ownership index (see ~/Documents/GitHub/inventory-api/docs/sonar-ownership-gap.md). T3.1 (Mibera dimensions) needs this populated."
+        }
+      }
+    },
+    "GetHoldingsResp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["holdings", "completeness"],
+      "properties": {
+        "holdings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InventoryContractHolding" }
+        },
+        "completeness": { "$ref": "#/$defs/InventoryCompleteness" }
+      }
+    }
+  }
+}
