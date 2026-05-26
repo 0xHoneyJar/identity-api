@@ -236,6 +236,12 @@ function rateLimitBudget(): number {
   return n
 }
 
+// BB F-02 fix: cap the buckets Map to prevent unbounded growth. With the
+// rate-limit now post-auth, the bound is the count of LEGITIMATE cells —
+// in practice <100 across the cluster — but a defensive cap protects
+// against a hot-rotation scenario where many revoked-key rows leak names
+// into the bucket map before their key gets verified-against-revoked.
+const RATE_LIMIT_BUCKETS_MAX = 1000
 const _rateLimitBuckets = new Map<string, number[]>()
 
 /**
@@ -261,6 +267,25 @@ function rateLimitCheck(
   }
   recent.push(nowMs)
   _rateLimitBuckets.set(cellName, recent)
+
+  // BB F-02: bound the buckets Map. If we exceed the cap, drop the oldest
+  // bucket (whichever has the smallest most-recent timestamp — those cells
+  // are stale anyway and re-enter the Map on their next request).
+  if (_rateLimitBuckets.size > RATE_LIMIT_BUCKETS_MAX) {
+    let oldestCell: string | null = null
+    let oldestMaxTs = Infinity
+    for (const [name, stamps] of _rateLimitBuckets) {
+      const maxTs = stamps[stamps.length - 1] ?? 0
+      if (maxTs < oldestMaxTs) {
+        oldestMaxTs = maxTs
+        oldestCell = name
+      }
+    }
+    if (oldestCell !== null && oldestCell !== cellName) {
+      _rateLimitBuckets.delete(oldestCell)
+    }
+  }
+
   return { allowed: true }
 }
 
@@ -357,23 +382,19 @@ export const serviceJwtIssue = route
       return errorResp(422, "INVALID_TTL", "ttl_sec must be 60..3600")
     }
 
-    // ─── Step 3: rate limit (per-cell, pre-auth so brute force costs less) ─
-    // We DO rate-limit pre-auth on purpose: an attacker spraying invalid
-    // API keys for one cell_name should hit 429 before they can probe the
-    // argon2id verify hot path (each verify is intentionally expensive ~64MB
-    // memory cost). The rate is generous enough (1000/min) that legitimate
-    // cells will never trip it.
     const now = Date.now()
-    const rl = rateLimitCheck(cellName, now)
-    if (!rl.allowed) {
-      return errorResp(429, "RATE_LIMITED", "issuance rate exceeded", {
-        "retry-after": String(rl.retryAfterSec),
-      })
-    }
-
     const spine = getSpine()
 
-    // ─── Step 4: cell_api_keys lookup + argon2id verify ────────────────
+    // ─── Step 3: cell_api_keys lookup + argon2id verify (PRE-rate-limit) ─
+    // BB F-01 fix: rate-limit is now POST-auth. The earlier pre-auth shape
+    // let an attacker exhaust a known cell-name's budget without holding the
+    // key — targeted DoS on a published cell. We accept the slightly larger
+    // CPU-DoS surface (argon2id verify on bogus keys) because (a) failed
+    // verifies don't accumulate state in _rateLimitBuckets, (b) the schema-
+    // level slug CHECK on cell_name + the cell_api_keys SELECT short-circuit
+    // on unknown names BEFORE the expensive verify, and (c) infrastructure-
+    // layer per-IP throttling (Railway / reverse proxy) covers the
+    // request-rate DoS class that the in-process per-cell budget can't.
     const sql = spineSql(spine)
     const keyRows = (await sql`
       SELECT id, key_hash
@@ -384,12 +405,26 @@ export const serviceJwtIssue = route
     `) as Array<{ id: string; key_hash: string }>
 
     if (keyRows.length === 0) {
+      // Unknown / revoked cell — short-circuit BEFORE argon2id verify so the
+      // CPU cost is bounded to one indexed SELECT.
       return errorResp(401, "INVALID_CELL_KEY", "X-Cell-Api-Key invalid or revoked")
     }
     const apiKeyRow = keyRows[0]!
     const keyOk = await verifyCellApiKey(presentedKey, apiKeyRow.key_hash)
     if (!keyOk) {
       return errorResp(401, "INVALID_CELL_KEY", "X-Cell-Api-Key invalid or revoked")
+    }
+
+    // ─── Step 4: rate limit (per-cell, POST-auth per BB F-01) ──────────
+    // Only authenticated cells consume rate-limit budget. This means
+    // _rateLimitBuckets is bounded by the count of legitimate cells (small).
+    // BB F-02 fix: an explicit cap (RATE_LIMIT_BUCKETS_MAX) + clear-oldest
+    // eviction below adds a defensive bound even if cell_api_keys grows.
+    const rl = rateLimitCheck(cellName, now)
+    if (!rl.allowed) {
+      return errorResp(429, "RATE_LIMITED", "issuance rate exceeded", {
+        "retry-after": String(rl.retryAfterSec),
+      })
     }
 
     // ─── Step 5: operator_grants lookup (ACL) ──────────────────────────
@@ -414,8 +449,19 @@ export const serviceJwtIssue = route
     }
 
     // ─── Step 6: construct claims + sign ───────────────────────────────
-    const iss =
-      process.env.IDENTITY_API_URL ?? process.env.IDENTITY_API_ISS ?? "https://identity.0xhoneyjar.xyz"
+    // BB F-03 fix: require explicit env config — no silent production
+    // fallback. A misconfigured deploy where neither IDENTITY_API_URL nor
+    // IDENTITY_API_ISS is set MUST fail fast (operator notice) rather than
+    // mint tokens claiming an arbitrary hardcoded issuer that downstream
+    // verifiers would then refuse via ISS_MISMATCH (silent breakage).
+    const iss = process.env.IDENTITY_API_URL ?? process.env.IDENTITY_API_ISS
+    if (!iss) {
+      return errorResp(
+        500,
+        "ISSUER_NOT_CONFIGURED",
+        "identity-api missing IDENTITY_API_URL / IDENTITY_API_ISS env (deploy misconfiguration)",
+      )
+    }
     const issuedAtSec = Math.floor(now / 1000)
     const expSec = issuedAtSec + body.ttl_sec
     const jti = generateJti()
