@@ -54,7 +54,12 @@ CREATE TABLE service_jwt_issuance (
     issuing_cell_name     TEXT NOT NULL,                          -- the cell that authenticated to issuance endpoint (= sub for self-issuance; may differ if operator-issued)
     cell_api_key_id       UUID NOT NULL REFERENCES cell_api_keys(id),  -- FK back to sibling-migration table (T-2.4)
     metadata              JSONB NOT NULL DEFAULT '{}',            -- ip, user_agent, request_id, etc.
-    CONSTRAINT chk_ttl_positive CHECK (exp_at > issued_at)
+    CONSTRAINT chk_ttl_positive CHECK (exp_at > issued_at),
+    -- BB F-002: enforce the per-D-1.1 §3 TTL upper bound (max 3600s = 1h) at
+    -- the schema layer. Issuance code MUST already reject ttl_sec > 3600, but
+    -- defense-in-depth: if an operator-bypass or supply-chain compromise
+    -- somehow mints a longer-TTL JWT, the audit row insertion fails-CLOSED.
+    CONSTRAINT chk_ttl_upper_bound CHECK (exp_at <= issued_at + INTERVAL '3600 seconds')
 );
 
 -- Hot path: operator queries "all jtis issued in last N hours for cell X"
