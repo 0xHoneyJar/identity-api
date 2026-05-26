@@ -45,6 +45,7 @@
     "zod": "^4.4.3"
   },
   "dependencies": {
-    "@effect/schema": "^0.75"
+    "@effect/schema": "^0.75",
+    "effect": "^3.10.0"
   }
 }

@@ -24,12 +24,14 @@ import {
 const decodeClaims = S.decodeUnknownSync(SvcJwtClaims);
 const decodeHeader = S.decodeUnknownSync(SvcJwtHeader);
 
+const NOW = Math.floor(Date.now() / 1000);
 const validClaims: SvcJwtClaimsT = {
   iss: 'https://identity.0xhoneyjar.xyz',
   aud: 'mint-api',
   sub: 'activities-api',
-  exp: Math.floor(Date.now() / 1000) + 3600,
-  nbf: Math.floor(Date.now() / 1000),
+  iat: NOW,
+  exp: NOW + 3600,
+  nbf: NOW,
   role: 'mint.invoke',
   jti: 'Yp3Q5w8aLm9N2bV4xT6sKg',
 };
@@ -72,6 +74,44 @@ describe('SvcJwtClaims (D-1.1 §1)', () => {
     const nullAud = { ...validClaims, aud: null as unknown as string };
     expect(() => decodeClaims(nullAud)).toThrow();
   });
+
+  it('rejects empty-string sub (BB F-003 — security-critical claims refuse "")', () => {
+    expect(() => decodeClaims({ ...validClaims, sub: '' })).toThrow();
+  });
+
+  it('rejects empty-string iss (BB F-003)', () => {
+    expect(() => decodeClaims({ ...validClaims, iss: '' })).toThrow();
+  });
+
+  it('rejects empty-string aud (BB F-003)', () => {
+    expect(() => decodeClaims({ ...validClaims, aud: '' })).toThrow();
+  });
+
+  it('rejects empty-string role (BB F-003)', () => {
+    expect(() => decodeClaims({ ...validClaims, role: '' })).toThrow();
+  });
+
+  it('rejects empty-string jti (BB F-003 + F-008 test gap closure)', () => {
+    expect(() => decodeClaims({ ...validClaims, jti: '' })).toThrow();
+  });
+
+  it('rejects missing iat (BB F-004 — iat is mandatory)', () => {
+    const { iat: _iat, ...missingIat } = validClaims;
+    void _iat;
+    expect(() => decodeClaims(missingIat)).toThrow();
+  });
+
+  it('rejects non-integer exp (BB F-006 — unix-seconds must be integer)', () => {
+    expect(() => decodeClaims({ ...validClaims, exp: NOW + 0.5 })).toThrow();
+  });
+
+  it('rejects non-integer iat (BB F-006)', () => {
+    expect(() => decodeClaims({ ...validClaims, iat: NOW + 0.1 })).toThrow();
+  });
+
+  it('rejects negative exp (BB F-006 — must be positive)', () => {
+    expect(() => decodeClaims({ ...validClaims, exp: -1 })).toThrow();
+  });
 });
 
 describe('SvcJwtHeader (D-1.1 §1 header constraint)', () => {
@@ -109,5 +149,10 @@ describe('SvcJwtHeader (D-1.1 §1 header constraint)', () => {
     const { kid: _kid, ...missingKid } = validHeader;
     void _kid;
     expect(() => decodeHeader(missingKid)).toThrow();
+  });
+
+  it('rejects bare "svc-" kid with empty suffix (BB F-005)', () => {
+    const bareKid = { ...validHeader, kid: 'svc-' };
+    expect(() => decodeHeader(bareKid)).toThrow();
   });
 });

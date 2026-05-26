@@ -73,14 +73,24 @@ import { Schema as S } from '@effect/schema';
  * verifier library all consume the same `SvcJwtClaims` while applying
  * their own per-endpoint policies.
  */
+// Security-critical claims (sub/iss/aud/role/jti) refuse empty strings —
+// `S.String` alone accepts `""`, which would silently authorize a JWT with
+// a blank subject/issuer/audience/capability/id (per BB F-003).
+const NonEmptyString = S.String.pipe(S.minLength(1));
+
+// `iat`/`exp`/`nbf` are unix-seconds — integers, not arbitrary numbers
+// (per BB F-006). Non-negative; verifiers further check against now ± skew.
+const UnixSeconds = S.Number.pipe(S.int(), S.positive());
+
 export const SvcJwtClaims = S.Struct({
-  iss: S.String, // issuer — identity-api canonical URL (e.g. "https://identity.0xhoneyjar.xyz")
-  aud: S.String, // audience — target cell name (e.g. "mint-api"); SINGLE-aud V1
-  sub: S.String, // subject — calling cell name (e.g. "activities-api")
-  exp: S.Number, // unix seconds — issuance time + ttl_sec (max 3600)
-  nbf: S.Number, // unix seconds — not-before, typically == iat
-  role: S.String, // capability claim (e.g. "mint.invoke", "activity.read")
-  jti: S.String, // jwt id — base64url(16 random bytes); recorded at issuance
+  iss: NonEmptyString,    // issuer — identity-api canonical URL (e.g. "https://identity.0xhoneyjar.xyz")
+  aud: NonEmptyString,    // audience — target cell name (e.g. "mint-api"); SINGLE-aud V1
+  sub: NonEmptyString,    // subject — calling cell name (e.g. "activities-api")
+  iat: UnixSeconds,       // issued-at — unix seconds; per BB F-004, referenced by exp invariant `exp - iat ≤ 3600`
+  exp: UnixSeconds,       // expiry — issuance time + ttl_sec (max 3600 per D-1.1 §3)
+  nbf: UnixSeconds,       // not-before — typically == iat
+  role: NonEmptyString,   // capability claim (e.g. "mint.invoke", "activity.read")
+  jti: NonEmptyString,    // jwt id — base64url(16 random bytes); recorded at issuance
 });
 
 /**
@@ -104,10 +114,13 @@ export type SvcJwtClaims = S.Schema.Type<typeof SvcJwtClaims>;
  * bound (must start with `svc-`); the verifier can additionally
  * constrain via opts but cannot widen.
  */
+// `kid` must have a NON-EMPTY suffix after `svc-` — bare `"svc-"` would
+// pass the startsWith refinement but is not a valid kid (BB F-005).
+// `^svc-.+$` ensures both the prefix AND at least one character of suffix.
 export const SvcJwtHeader = S.Struct({
   alg: S.Literal('ES256'),
   typ: S.Literal('JWT'),
-  kid: S.String.pipe(S.startsWith('svc-')),
+  kid: S.String.pipe(S.pattern(/^svc-.+$/)),
 });
 
 export type SvcJwtHeader = S.Schema.Type<typeof SvcJwtHeader>;
