@@ -61,6 +61,7 @@
  */
 
 import { Schema as S } from '@effect/schema';
+import { Either } from 'effect';
 
 /**
  * Canonical svc-JWT claim set (D-1.1 §1). All seven claims are mandatory.
@@ -124,3 +125,52 @@ export const SvcJwtHeader = S.Struct({
 });
 
 export type SvcJwtHeader = S.Schema.Type<typeof SvcJwtHeader>;
+
+/**
+ * Validation envelope for `decodeSvcJwtClaims` and `decodeSvcJwtHeader`.
+ *
+ * Discriminated on `ok`. On `ok: false` the `error` field carries a
+ * human-readable summary suitable for logging (Effect.Schema's
+ * `ParseError.message` carries the structured tree, but stringification
+ * gives a single-line digest fit for audit envelopes).
+ *
+ * Why we expose a non-Effect wrapper API: the route handler (in `src/api/`)
+ * lives outside the workspace tree where `@effect/schema` resolves at the
+ * type-checker level. A thin sync-wrapper here keeps the route module
+ * free of Effect imports while preserving the schema as single source of
+ * truth (W2.5 T-2.6).
+ */
+export type SchemaValidationResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: string };
+
+/**
+ * Decode + validate an unknown value against `SvcJwtClaims`. Returns a
+ * discriminated-union envelope; never throws.
+ *
+ * Used by the svc-JWT issuance route to re-validate the produced JWT's
+ * claim segment after signing, closing the encode-bug class (D-1.1 §4
+ * post-task brief invariant — fail at the issuer rather than ship a
+ * malformed token to verifiers).
+ */
+export function decodeSvcJwtClaims(input: unknown): SchemaValidationResult<SvcJwtClaims> {
+  const result = S.decodeUnknownEither(SvcJwtClaims)(input);
+  if (Either.isRight(result)) {
+    return { ok: true, value: result.right };
+  }
+  return { ok: false, error: result.left.message };
+}
+
+/**
+ * Decode + validate an unknown value against `SvcJwtHeader`. Same shape +
+ * non-throwing posture as `decodeSvcJwtClaims`; used to confirm the produced
+ * JWT's protected header carries the correct `alg`, `typ`, and `kid`-prefix
+ * invariants (D-1.1 §1).
+ */
+export function decodeSvcJwtHeader(input: unknown): SchemaValidationResult<SvcJwtHeader> {
+  const result = S.decodeUnknownEither(SvcJwtHeader)(input);
+  if (Either.isRight(result)) {
+    return { ok: true, value: result.right };
+  }
+  return { ok: false, error: result.left.message };
+}
