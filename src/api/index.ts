@@ -48,8 +48,12 @@ import { me } from "./routes/me"
 import { resolveWallet, resolveAccount, resolveNym, getIdentity } from "./routes/resolve"
 import { getProfile, getMiberaDimensions } from "./routes/profile"
 import { linkVerifiedWallet } from "./routes/link"
+
 // W2.5 sprint-2 T-2.6 — cell-API-key-authenticated svc-JWT issuance.
 import { serviceJwtIssue } from "./routes/v1/auth/service-jwt"
+
+import { denylistCheck } from "./routes/v1/auth/denylist/check"
+
 
 // ---------------------------------------------------------------------------
 // App composition.
@@ -78,7 +82,11 @@ const app = new Hyper()
     getProfile,
     getMiberaDimensions,
     linkVerifiedWallet,
+
     serviceJwtIssue,
+
+    denylistCheck,
+
   ] as unknown as readonly Route[])
 
 // ---------------------------------------------------------------------------

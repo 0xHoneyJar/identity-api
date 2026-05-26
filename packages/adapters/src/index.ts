@@ -157,3 +157,35 @@ export {
 export {
   type FederationLogger,
 } from './federation-http';
+
+// ─── W2.5 svc-JWT verifier + denylist (T-2.7 · bead arrakis-v175) ───────
+//
+// Verifier library + post-validation denylist hook + cell-API-key auth
+// substrate. Materializes D-1.1 §5 (verify pipeline) + §6 (denylist
+// CONJUNCTIVE null-as-wildcard match) + the argon2id parameter pinning
+// contract (IMP-008 closure).
+//
+// **EXPLICIT NON-PRESENCE** (§0a anchor): NO `replayStore` opt on
+// VerifyOpts. The per-request issuance model (D2.5-12) structurally
+// removed the verify-time replay store; the denylist hook is the only
+// persistence-affecting verify-time check.
+
+export {
+  verify as verifySvcJwt,
+  type SvcJwtClaims,
+  type JwksCache as SvcJwtJwksCache,
+  type DenylistCheck,
+  type VerifyOpts as SvcJwtVerifyOpts,
+  type VerifyErrorCode as SvcJwtVerifyErrorCode,
+  type VerifyResult as SvcJwtVerifyResult,
+} from './svc-jwt-verifier';
+
+export {
+  PostgresDenylistCheck,
+  BunSqlDenylistCheck,
+  type BunSqlLike as DenylistBunSqlLike,
+} from './denylist-postgres';
+
+// T-2.7 IArgon2idVerifier type is in addition to the existing ARGON2ID_PARAMS
+// export on line ~64 above (introduced by T-2.6).
+export { type IArgon2idVerifier } from './argon2-params';
