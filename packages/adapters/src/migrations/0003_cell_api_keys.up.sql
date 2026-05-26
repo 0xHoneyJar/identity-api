@@ -60,7 +60,14 @@ CREATE TABLE cell_api_keys (
     issued_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     revoked_at      TIMESTAMPTZ,                                -- NULL until revoked
     CONSTRAINT chk_cell_api_keys_argon2id
-        CHECK (key_hash LIKE '$argon2id$v=19$%')                -- IMP-008: hash MUST be argon2id v=19 format; m/t/p pinned in app config
+        CHECK (key_hash LIKE '$argon2id$v=19$%'),               -- IMP-008: hash MUST be argon2id v=19 format; m/t/p pinned in app config
+    -- BB F-002: cell_name slug shape — lowercase alphanumeric + hyphen, 3–63
+    -- chars (matches the rest of the cluster's slug convention; rejects empty
+    -- strings, leading/trailing hyphens, uppercase, dots, slashes). Aligns
+    -- the audit/ACL identifier space with the existing label-safe-slug pattern
+    -- used in the coord manifest + freeside-network registry.
+    CONSTRAINT chk_cell_name_slug
+        CHECK (cell_name ~ '^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$')
 );
 
 -- Active-key partial unique index: one active key per cell_name at any moment.
