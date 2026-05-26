@@ -43,5 +43,8 @@
   },
   "devDependencies": {
     "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "@effect/schema": "^0.75"
   }
 }

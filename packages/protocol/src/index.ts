@@ -70,6 +70,14 @@ export {
   type Tier,
 } from './jwt-claims';
 
+// svc-JWT claims (W2.5 cluster-auth · cell-to-cell service tokens)
+// First Effect.Schema artifact; sits beside the W2 zod JWTClaimSchema above
+// per operator-memory freeside-effect-transition (2026-05-26).
+export {
+  SvcJwtClaims,
+  SvcJwtHeader,
+} from './svc-jwt-claims';
+
 // Credential proofs (slice-B: Dynamic only · siwe/passkey/seedvault V2)
 export {
   DynamicCredentialProofSchema,
