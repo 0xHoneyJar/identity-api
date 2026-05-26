@@ -70,6 +70,16 @@ CREATE INDEX idx_svc_jwt_denylist_sub
     ON service_jwt_denylist (sub)
     WHERE sub IS NOT NULL;
 
+-- BB F-002: composite index covering rules where ALL THREE discriminators
+-- are non-null (compound rules). The 3 single-column partial indexes above
+-- each cover their column's non-null slice; for compound rules they all
+-- match equally, and Postgres falls back to a sequential scan of one slice
+-- (worst case: O(table_size)). This composite gives the planner an
+-- index-only path for the {kid, jti, sub} all-non-null case.
+CREATE INDEX idx_svc_jwt_denylist_compound
+    ON service_jwt_denylist (kid, jti, sub)
+    WHERE kid IS NOT NULL AND jti IS NOT NULL AND sub IS NOT NULL;
+
 COMMENT ON TABLE service_jwt_denylist IS
     'Any-match deny rules per D2.5-11. Null-as-wildcard CONJUNCTIVE semantics: a JWT is denied by a rule when every non-null field of the rule matches the JWTs corresponding field. Operator-managed; no automated sweep — deny rules are forever unless explicitly removed.';
 

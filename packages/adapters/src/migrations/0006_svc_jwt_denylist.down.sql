@@ -16,6 +16,7 @@
 
 BEGIN;
 
+DROP INDEX IF EXISTS idx_svc_jwt_denylist_compound;
 DROP INDEX IF EXISTS idx_svc_jwt_denylist_sub;
 DROP INDEX IF EXISTS idx_svc_jwt_denylist_jti;
 DROP INDEX IF EXISTS idx_svc_jwt_denylist_kid;
