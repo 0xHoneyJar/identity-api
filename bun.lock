@@ -18,9 +18,11 @@
       "name": "@freeside-auth/adapters",
       "version": "0.1.0",
       "dependencies": {
+        "@effect/schema": "^0.75",
         "@freeside-auth/engine": "workspace:*",
         "@freeside-auth/ports": "workspace:*",
         "@freeside-auth/protocol": "workspace:*",
+        "effect": "^3.10.0",
         "jose": "^6.2.3",
       },
       "devDependencies": {
