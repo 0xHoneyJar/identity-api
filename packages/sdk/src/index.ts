@@ -10,7 +10,12 @@
  *   import { createIdentityClient } from "@freeside-auth/identity-client";
  *
  *   const client = createIdentityClient({
- *     baseUrl: "https://identity-api.fly.dev",
+ *     // Production target: Railway-hosted (PRD v3.0 §3 D4 — single-instance,
+ *     // Hyper-backed). The canonical subdomain is `identity.{org-tld}` (no
+ *     // `-api` segment). For 0xHoneyJar deployment this is
+ *     // `https://identity.0xhoneyjar.xyz` — verified live 2026-05-26
+ *     // (Railway custom domain + AWS Route53 CNAME → 74s1e7bu.up.railway.app).
+ *     baseUrl: process.env.IDENTITY_API_URL ?? "https://identity.0xhoneyjar.xyz",
  *     jwt: () => myAuthStore.getAccessToken(),
  *   });
  *
