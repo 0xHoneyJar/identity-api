@@ -73,9 +73,17 @@ export {
 // svc-JWT claims (W2.5 cluster-auth · cell-to-cell service tokens)
 // First Effect.Schema artifact; sits beside the W2 zod JWTClaimSchema above
 // per operator-memory freeside-effect-transition (2026-05-26).
+//
+// W2.5 T-2.6 (bead arrakis-ha0l): thin sync-wrapper validation helpers
+// (`decodeSvcJwtClaims`, `decodeSvcJwtHeader`) provide a non-Effect-aware
+// API for consumers (e.g., the route handler at src/api/) that live outside
+// the workspace tree where @effect/schema resolves.
 export {
   SvcJwtClaims,
   SvcJwtHeader,
+  decodeSvcJwtClaims,
+  decodeSvcJwtHeader,
+  type SchemaValidationResult,
 } from './svc-jwt-claims';
 
 // Credential proofs (slice-B: Dynamic only · siwe/passkey/seedvault V2)

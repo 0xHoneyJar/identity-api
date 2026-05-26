@@ -58,6 +58,24 @@ export {
   type JwksValidatorConfig,
 } from './jwks-validator';
 
+// Argon2id pinned parameters (W2.5 T-2.6 · flatline IMP-008)
+// Single source of truth for cell_api_keys hash + verify.
+export {
+  ARGON2ID_PARAMS,
+  ARGON2ID_HASH_PREFIX,
+  BUN_PASSWORD_HASH_OPTIONS,
+} from './argon2-params';
+
+// LocalEs256Signer — ES256 svc-JWT signer (W2.5 T-2.6 · D-1.1 §2)
+// Consumed by the /v1/auth/service-jwt route handler.
+export {
+  createLocalEs256Signer,
+  createLocalEs256SignerFromEnv,
+  __generateTestEs256KeyMaterial,
+  type ServiceJwtSigner,
+  type LocalEs256SignerConfig,
+} from './local-es256-signer';
+
 // HTTP JWT signer (B-1.4 · §12.3 delegation default · points at loa-freeside/apps/gateway)
 export {
   HttpJWTSigner,
