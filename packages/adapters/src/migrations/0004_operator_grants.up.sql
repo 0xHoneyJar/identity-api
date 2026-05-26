@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 0003_operator_grants.up.sql — Privy DID issuance ACL (W2.5 T-2.5).
+-- Migration 0004_operator_grants.up.sql — Privy DID issuance ACL (W2.5 T-2.5).
 --
 -- Materializes D-1.5 §4 (canonical DDL) + SDD §4.5 (post-sweep, with
 -- granted_by_array element-uniqueness CHECK added per flatline post-sweep
@@ -110,6 +110,17 @@ CREATE TABLE operator_grants (
     -- raw subqueries inside CHECK expressions.
     CONSTRAINT chk_granted_by_array_unique CHECK (
         jsonb_string_array_unique(granted_by_array)
+    ),
+
+    -- Self-approval gap closure (BB F-002): the grantee themselves MUST NOT
+    -- appear in granted_by_array — otherwise a single operator could grant
+    -- themselves production capability and self-approve, satisfying the
+    -- 2-of-3 threshold only when paired with ONE other approver instead of
+    -- requiring TWO other approvers. The @> containment operator on jsonb
+    -- arrays of strings tests "does the array contain this string". We
+    -- negate it to require absence.
+    CONSTRAINT chk_no_self_approval CHECK (
+        NOT (granted_by_array @> to_jsonb(grantee_did))
     )
 );
 
@@ -150,6 +161,16 @@ CREATE INDEX idx_operator_grants_lookup
 -- "List grants for grantee X" admin/operator hot path.
 CREATE INDEX idx_operator_grants_grantee
     ON operator_grants (grantee_did)
+    WHERE revoked_at IS NULL;
+
+-- BB F-004: prevent duplicate ACTIVE grants for the same (grantee_did, sub,
+-- aud, role) tuple. Without this, an operator could create multiple active
+-- rows for the same tuple — only one is needed semantically, and dupes make
+-- the soft-delete audit trail ambiguous (which row revoked when?). The
+-- partial unique applies ONLY to active rows (revoked_at IS NULL); revoked
+-- rows can freely duplicate the tuple since they're historical.
+CREATE UNIQUE INDEX uq_operator_grants_active_tuple
+    ON operator_grants (grantee_did, sub, aud, role)
     WHERE revoked_at IS NULL;
 
 COMMIT;
