@@ -49,7 +49,11 @@ composes_with:
     role: "Score source for profile composition (read-time)"
     tag: "ScorePort@1.0.0+0000000000000000"        # PLACEHOLDER — doctor recomputes
     required: false
-  codex:
+  # outer: prefix per loa-freeside#235 B-transition.
+  # Swap to `mibera-codex-api` (without prefix) when the HTTP serving layer
+  # ships (tracked at construct-mibera-codex#83).
+  # Key quoted because YAML loaders disagree on bare keys with internal colons.
+  "outer:mibera-codex":
     role: "7-dimension Mibera trait + grail source (read-time)"
     tag: "CodexPort@1.0.0+0000000000000000"        # PLACEHOLDER — doctor recomputes
     required: true
