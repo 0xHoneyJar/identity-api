@@ -27,7 +27,10 @@
  */
 
 import type { JWK } from 'jose';
-import type { SvcJwtJwksCache } from '@freeside-auth/adapters';
+// Import via ./verify (which re-exports SvcJwtJwksCache from adapters) so
+// the vendored auth-sdk has ONE rewrite point for the @freeside-auth/adapters
+// alias — not two. Reduces drift between workspace + vendored layouts.
+import type { SvcJwtJwksCache } from './verify';
 
 interface CacheEntry {
   keys: JWK[];
@@ -61,7 +64,11 @@ export class InMemoryJwksCache implements SvcJwtJwksCache {
       this.entries.delete(url);
       return null;
     }
-    return entry.keys;
+    // Shallow-copy so a caller mutating the returned array (or jose helpers
+    // doing so under the hood) cannot corrupt the cached entry for future
+    // hits. Individual JWK objects are still shared — jose treats them as
+    // immutable internally.
+    return entry.keys.slice();
   }
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {
@@ -111,7 +118,9 @@ export class LruJwksCache implements SvcJwtJwksCache {
     }
     this.entries.delete(url);
     this.entries.set(url, entry);
-    return entry.keys;
+    // Shallow-copy so callers cannot mutate the cached array (see
+    // InMemoryJwksCache.get for the same rationale).
+    return entry.keys.slice();
   }
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {

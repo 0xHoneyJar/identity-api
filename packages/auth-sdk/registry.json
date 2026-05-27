@@ -26,11 +26,24 @@
     {
       "package": "@freeside-auth/adapters",
       "files": [
-        "src/svc-jwt-verifier.ts",
-        "src/denylist-postgres.ts",
-        "src/argon2-params.ts"
+        "src/svc-jwt-verifier.ts"
       ],
-      "reason": "auth-sdk's ./verify re-exports verifySvcJwt + verifier types from svc-jwt-verifier.ts; PostgresDenylistCheck (used as the DenylistCheck impl in production) lives in denylist-postgres.ts; argon2-params.ts is pulled in via the adapters barrel's IArgon2idVerifier type alias"
+      "reason": "auth-sdk's ./verify re-exports verifySvcJwt + verifier types from svc-jwt-verifier.ts. The vendored rewrite turns @freeside-auth/adapters into a direct import of this file, bypassing the adapters barrel — so adjacent adapter files (argon2-params, denylist-postgres, postgres-split-adapter) are NOT in the transitive closure of the minimal vendor."
+    }
+  ],
+  "optional_transitive": [
+    {
+      "package": "@freeside-auth/adapters",
+      "files": [
+        "src/denylist-postgres.ts",
+        "src/postgres-split-adapter.ts"
+      ],
+      "reason": "PostgresDenylistCheck — the Postgres-direct DenylistCheck impl. Only needed by cells with direct PG access (rare; most cells use HTTP indirection to POST /v1/auth/denylist/check). Pulls in postgres-split-adapter.ts for the PgPoolLike type, which itself depends on @freeside-auth/ports + the pg npm package."
+    },
+    {
+      "package": "@freeside-auth/adapters",
+      "files": ["src/argon2-params.ts"],
+      "reason": "IArgon2idVerifier interface — only needed if the consumer wants to integrate the cell-API-key auth path (separate from svc-JWT verify). Not pulled in by the vendored auth-sdk's compilation."
     }
   ],
   "peer_deps": {
@@ -70,26 +83,31 @@
       "git clone https://github.com/0xHoneyJar/identity-api.git /tmp/identity-api",
       "git -C /tmp/identity-api checkout <commit-sha>",
       "",
-      "# 2. Copy auth-sdk source + transitive deps into your consumer",
+      "# 2. Copy auth-sdk source + STRICT-MINIMUM transitive deps",
       "VENDOR=/path/to/your-app/src/vendor",
       "mkdir -p $VENDOR/auth-sdk $VENDOR/auth-protocol $VENDOR/auth-adapters",
       "cp -R /tmp/identity-api/packages/auth-sdk/src/ $VENDOR/auth-sdk/",
       "cp /tmp/identity-api/packages/protocol/src/svc-jwt-claims.ts $VENDOR/auth-protocol/",
       "cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts $VENDOR/auth-adapters/",
-      "cp /tmp/identity-api/packages/adapters/src/denylist-postgres.ts $VENDOR/auth-adapters/",
-      "cp /tmp/identity-api/packages/adapters/src/argon2-params.ts $VENDOR/auth-adapters/",
       "",
-      "# 3. Rewrite workspace aliases to vendored paths",
-      "find $VENDOR/auth-sdk -name '*.ts' -exec sed -i.bak \\",
-      "  -e 's|@freeside-auth/protocol|../auth-protocol/svc-jwt-claims|g' \\",
-      "  -e 's|@freeside-auth/adapters|../auth-adapters/svc-jwt-verifier|g' {} \\;",
-      "find $VENDOR -name '*.bak' -delete",
+      "# 3. Rewrite workspace aliases — ALL three vendored dirs need the pass",
+      "for dir in \"$VENDOR/auth-sdk\" \"$VENDOR/auth-adapters\" \"$VENDOR/auth-protocol\"; do",
+      "  find \"$dir\" -name '*.ts' -exec sed -i.bak \\",
+      "    -e 's|@freeside-auth/protocol|../auth-protocol/svc-jwt-claims|g' \\",
+      "    -e 's|@freeside-auth/adapters|../auth-adapters/svc-jwt-verifier|g' {} \\;",
+      "done",
+      "find \"$VENDOR\" -name '*.bak' -delete",
       "",
       "# 4. Install peer dependencies in your consumer's package.json",
       "#    \"@effect/schema\": \"^0.75\", \"effect\": \"^3.10.0\", \"jose\": \"^6.0.0\"",
       "",
       "# 5. Run the conformance suite to confirm the vendored copy is intact",
-      "bun test  # expects runConformanceSuite() ok===true"
+      "bun test  # expects runConformanceSuite() ok===true",
+      "",
+      "# OPTIONAL — copy PostgresDenylistCheck (only if your cell has direct PG access)",
+      "# cp /tmp/identity-api/packages/adapters/src/denylist-postgres.ts $VENDOR/auth-adapters/",
+      "# cp /tmp/identity-api/packages/adapters/src/postgres-split-adapter.ts $VENDOR/auth-adapters/",
+      "# (also requires vendoring or aliasing @freeside-auth/ports + adding the 'pg' npm dep)"
     ]
   },
   "cli_recipe": {

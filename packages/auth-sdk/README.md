@@ -72,33 +72,50 @@ git log -1 --format='%H'         # record it
 
 ### Step 2 — Copy the three source trees into your consumer
 
+The strict-minimum transitive list is **two files** (the auth-sdk's
+re-export chain ends here):
+
 ```bash
+VENDOR=/path/to/your-app/src/vendor
+
 # auth-sdk itself
-mkdir -p /path/to/your-app/src/vendor/auth-sdk
-cp -R /tmp/identity-api/packages/auth-sdk/src/ /path/to/your-app/src/vendor/auth-sdk/
+mkdir -p "${VENDOR}/auth-sdk"
+cp -R /tmp/identity-api/packages/auth-sdk/src/ "${VENDOR}/auth-sdk/"
 
-# Transitive: protocol (svc-jwt-claims schema + decoders)
-mkdir -p /path/to/your-app/src/vendor/auth-protocol
-cp /tmp/identity-api/packages/protocol/src/svc-jwt-claims.ts /path/to/your-app/src/vendor/auth-protocol/
+# Transitive: protocol (svc-jwt-claims Effect.Schema)
+mkdir -p "${VENDOR}/auth-protocol"
+cp /tmp/identity-api/packages/protocol/src/svc-jwt-claims.ts "${VENDOR}/auth-protocol/"
 
-# Transitive: adapters (verifier + denylist hook)
-mkdir -p /path/to/your-app/src/vendor/auth-adapters
-cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts /path/to/your-app/src/vendor/auth-adapters/
-cp /tmp/identity-api/packages/adapters/src/denylist-postgres.ts /path/to/your-app/src/vendor/auth-adapters/
+# Transitive: adapters (the verify function)
+mkdir -p "${VENDOR}/auth-adapters"
+cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts "${VENDOR}/auth-adapters/"
 ```
+
+> **DenylistCheck is BYO**. The auth-sdk re-exports the `DenylistCheck`
+> *interface* (`{ matches(kid, jti, sub): Promise<{denied, ...}> }`) but
+> NO concrete impl. Consumers provide their own — the cluster default
+> is HTTP-indirection to `POST /v1/auth/denylist/check` (for cells
+> without direct PG access). If you want identity-api's
+> `PostgresDenylistCheck` (rare — only cells with direct PG access),
+> copy `packages/adapters/src/denylist-postgres.ts` AND
+> `packages/adapters/src/postgres-split-adapter.ts` (transitively
+> pulls in `@freeside-auth/ports` + the `pg` npm package).
 
 ### Step 3 — Rewrite the cross-package imports
 
-The vendored SDK imports `@freeside-auth/protocol` and
-`@freeside-auth/adapters`. Rewrite to relative paths matching your
-vendor layout:
+The vendored sources still import `@freeside-auth/protocol` and
+`@freeside-auth/adapters` (workspace aliases). Rewrite ALL three
+vendored directories — the transitive copies need the same pass:
 
 ```bash
-# From your-app root
-find src/vendor/auth-sdk -name "*.ts" -exec sed -i.bak \
-  -e 's|@freeside-auth/protocol|../auth-protocol/svc-jwt-claims|g' \
-  -e 's|@freeside-auth/adapters|../auth-adapters/svc-jwt-verifier|g' {} \;
-find src/vendor/auth-sdk -name "*.bak" -delete
+# From your-app root — rewrite ALL vendored trees (sdk + transitive)
+VENDOR=src/vendor
+for dir in "${VENDOR}/auth-sdk" "${VENDOR}/auth-adapters" "${VENDOR}/auth-protocol"; do
+  find "${dir}" -name '*.ts' -exec sed -i.bak \
+    -e 's|@freeside-auth/protocol|../auth-protocol/svc-jwt-claims|g' \
+    -e 's|@freeside-auth/adapters|../auth-adapters/svc-jwt-verifier|g' {} \;
+done
+find "${VENDOR}" -name '*.bak' -delete
 ```
 
 Or — if your tsconfig has path aliases — point

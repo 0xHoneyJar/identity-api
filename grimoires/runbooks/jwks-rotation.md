@@ -49,45 +49,75 @@ the old key drops out of the JWKS document, completing the rotation.
 
 The PEM format must be PKCS#8 (the format `jose.importPKCS8` accepts).
 
+> **Why NOT `/tmp` + `chmod` after**: writing the private key to a shared
+> directory (`/tmp` is 1777) under the operator's default umask
+> (commonly 0022 → file mode 0644) creates a same-user TOCTOU window:
+> between the `>` redirect and the `chmod 0600`, any concurrent process
+> running as the same user (backup agents, iCloud/Dropbox sync, indexers,
+> dev-tool watchers, CI sidecars) can race the operator and read the
+> private key. The predictable filename in `/tmp/svc-jwt-…` widens the
+> attack surface for any previously-compromised unprivileged process.
+> Blast radius: the holder can forge svc-JWTs cluster-wide under the
+> current kid until the next rotation + 2h overlap drain. The procedure
+> below uses (a) a private per-operator directory mode 0700, (b) a
+> subshell `umask 077` so the file is born 0600, and (c) a post-write
+> mode assertion that fails loudly if the race re-opens.
+
+Operator key staging area — set once per workstation, reused across rotations:
+
+```bash
+# Private per-operator key staging — NOT shared /tmp
+KEY_DIR="${HOME}/.cache/freeside-auth/svc-keys"
+mkdir -p "${KEY_DIR}" && chmod 0700 "${KEY_DIR}"
+
+# Pick today's date + a sequence letter for the new kid
+NEW_KID="svc-$(date -u +%Y-%m-%d)-a"   # bump to -b if -a already exists
+KEY_FILE="${KEY_DIR}/svc-jwt-${NEW_KID}.pkcs8.pem"
+```
+
 Option A — using openssl (works anywhere openssl is installed):
 
 ```bash
-# Pick today's date + a sequence letter for the new kid
-NEW_KID="svc-$(date -u +%Y-%m-%d)-a"   # bump to -b if -a already exists
-
-# Generate the EC P-256 private key in PKCS#8
-openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 \
-  -pkeyopt ec_param_enc:named_curve \
-  -out /tmp/svc-jwt-${NEW_KID}.pkcs8.pem
+# Generate inside a subshell with restrictive umask so the file is BORN
+# mode 0600, never 0644. Subshell scope keeps the umask change local.
+(
+  umask 077
+  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 \
+    -pkeyopt ec_param_enc:named_curve \
+    -out "${KEY_FILE}"
+)
 
 # Sanity: should print "id-ecPublicKey ... P-256"
-openssl pkey -in /tmp/svc-jwt-${NEW_KID}.pkcs8.pem -text -noout | head -10
-
-echo "kid=${NEW_KID}"
-echo "pem=/tmp/svc-jwt-${NEW_KID}.pkcs8.pem"
+openssl pkey -in "${KEY_FILE}" -text -noout | head -10
 ```
 
 Option B — using Bun + jose (matches what `LocalEs256Signer` will consume):
 
 ```bash
-NEW_KID="svc-$(date -u +%Y-%m-%d)-a"
-
-bun --eval '
-  const { generateKeyPair, exportPKCS8 } = await import("jose");
-  const { privateKey } = await generateKeyPair("ES256", { extractable: true });
-  const pem = await exportPKCS8(privateKey);
-  process.stdout.write(pem);
-' > /tmp/svc-jwt-${NEW_KID}.pkcs8.pem
-
-echo "kid=${NEW_KID}"
-echo "pem=/tmp/svc-jwt-${NEW_KID}.pkcs8.pem"
+(
+  umask 077
+  bun --eval '
+    const { generateKeyPair, exportPKCS8 } = await import("jose");
+    const { privateKey } = await generateKeyPair("ES256", { extractable: true });
+    const pem = await exportPKCS8(privateKey);
+    process.stdout.write(pem);
+  ' > "${KEY_FILE}"
+)
 ```
 
-Verify the file mode is 0600 — the private key is sensitive material:
+Mode assertion — fail loudly if any future edit re-opens the race:
 
 ```bash
-chmod 0600 /tmp/svc-jwt-${NEW_KID}.pkcs8.pem
-ls -l /tmp/svc-jwt-${NEW_KID}.pkcs8.pem
+# Linux: stat -c '%a' ; macOS: stat -f '%Lp'
+actual_mode="$(stat -c '%a' "${KEY_FILE}" 2>/dev/null || stat -f '%Lp' "${KEY_FILE}")"
+if [[ "${actual_mode}" != "600" ]]; then
+  echo "ABORT: key file mode is ${actual_mode}, not 600 — refusing to proceed" >&2
+  rm -f "${KEY_FILE}"
+  exit 1
+fi
+
+echo "kid=${NEW_KID}"
+echo "pem=${KEY_FILE}"
 ```
 
 ### Step 2 — promote the current key to PREV slot
@@ -234,12 +264,27 @@ the JWKS document shows ONLY the new kid.
 ### Step 9 — securely destroy the previous key material
 
 The PREV PEM is no longer accepted by verifiers but is still sensitive
-material until destroyed:
+material until destroyed. If you saved a local copy of the previous PEM
+in the operator staging directory (Step 1's `${KEY_DIR}`), wipe it now:
 
 ```bash
-# If the operator stored a copy locally during step 2:
-shred -u /tmp/svc-jwt-${OLD_KID}.pkcs8.pem 2>/dev/null \
-  || rm -P /tmp/svc-jwt-${OLD_KID}.pkcs8.pem  # macOS
+# REQUIRED — name the previous kid explicitly (no silent expansion
+# to an empty string if unset). The :? aborts the block instead of
+# pretending to wipe nothing.
+OLD_KID="${OLD_KID:?Set OLD_KID to the previous kid before running, e.g. OLD_KID=svc-2026-04-12-a}"
+OLD_PEM="${KEY_DIR:-${HOME}/.cache/freeside-auth/svc-keys}/svc-jwt-${OLD_KID}.pkcs8.pem"
+
+if [[ ! -f "${OLD_PEM}" ]]; then
+  echo "No file at ${OLD_PEM} — nothing to destroy locally."
+elif command -v shred >/dev/null; then
+  shred -u "${OLD_PEM}" && echo "shredded ${OLD_PEM}"
+else
+  # macOS: rm -P overwrites + unlinks. APFS is copy-on-write so this
+  # cannot guarantee physical erasure of all blocks; treat as "logically
+  # destroyed" and rely on FileVault / full-disk-encryption for the
+  # at-rest story.
+  rm -P "${OLD_PEM}" && echo "rm -P'd ${OLD_PEM} (APFS caveat applies)"
+fi
 ```
 
 Record the rotation in the operator log:
