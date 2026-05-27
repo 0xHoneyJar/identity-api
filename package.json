@@ -16,6 +16,7 @@
     "packages/mcp-tools",
     "packages/engine",
     "packages/sdk",
+    "packages/auth-sdk",
     "packages/ui"
   ],
   "scripts": {

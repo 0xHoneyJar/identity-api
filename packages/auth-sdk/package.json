@@ -1,0 +1,36 @@
+{
+  "name": "@freeside-auth/auth-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source-distributed svc-JWT verifier SDK for freeside-auth consumers. NOT an npm package — consumers vendor the src/ tree (shadcn-style 'add' pattern) per PRD v3.0 §11 post-verify lock-ins. Internal workspace name: @freeside-auth/auth-sdk. External vendored alias (per-consumer): @0xhoneyjar/auth. Sibling to @freeside-auth/identity-client (HTTP client); this is the crypto/verification SDK. See README.md §Vendoring.",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./verify": "./src/verify.ts",
+    "./svc-jwt-claims": "./src/svc-jwt-claims.ts",
+    "./jwks-cache": "./src/jwks-cache.ts",
+    "./conformance": "./src/conformance/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:coverage:gate": "bash scripts/check-coverage.sh"
+  },
+  "dependencies": {
+    "@freeside-auth/protocol": "workspace:*",
+    "@freeside-auth/adapters": "workspace:*"
+  },
+  "peerDependencies": {
+    "@effect/schema": "^0.75",
+    "effect": "^3.10.0",
+    "jose": "^6.0.0"
+  },
+  "devDependencies": {
+    "@effect/schema": "^0.75",
+    "effect": "^3.10.0",
+    "jose": "^6.2.3"
+  }
+}
