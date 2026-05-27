@@ -78,9 +78,12 @@ re-export chain ends here):
 ```bash
 VENDOR=/path/to/your-app/src/vendor
 
-# auth-sdk itself
+# auth-sdk itself — copy CONTENTS of src/ into auth-sdk/ (the `/.` after
+# src skips the directory and copies its children, so the vendored
+# layout ends up as auth-sdk/index.ts NOT auth-sdk/src/index.ts; this
+# matches the import shape `from '@/vendor/auth-sdk'` below).
 mkdir -p "${VENDOR}/auth-sdk"
-cp -R /tmp/identity-api/packages/auth-sdk/src/ "${VENDOR}/auth-sdk/"
+cp -R /tmp/identity-api/packages/auth-sdk/src/. "${VENDOR}/auth-sdk/"
 
 # Transitive: protocol (svc-jwt-claims Effect.Schema)
 mkdir -p "${VENDOR}/auth-protocol"
@@ -89,6 +92,23 @@ cp /tmp/identity-api/packages/protocol/src/svc-jwt-claims.ts "${VENDOR}/auth-pro
 # Transitive: adapters (the verify function)
 mkdir -p "${VENDOR}/auth-adapters"
 cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts "${VENDOR}/auth-adapters/"
+```
+
+After this step the vendored tree should look like:
+
+```
+src/vendor/
+├── auth-sdk/
+│   ├── __tests__/
+│   ├── conformance/
+│   ├── index.ts
+│   ├── jwks-cache.ts
+│   ├── svc-jwt-claims.ts
+│   └── verify.ts
+├── auth-protocol/
+│   └── svc-jwt-claims.ts
+└── auth-adapters/
+    └── svc-jwt-verifier.ts
 ```
 
 > **DenylistCheck is BYO**. The auth-sdk re-exports the `DenylistCheck`

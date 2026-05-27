@@ -116,6 +116,18 @@ describe('@freeside-auth/auth-sdk — JwksCache concrete impls', () => {
       const got = await cache.get('https://example.com/jwks.json');
       expect(got).toEqual([otherJwk]);
     });
+
+    it('defensive-copies on set + get (caller mutation does not corrupt entry)', async () => {
+      const cache = new InMemoryJwksCache();
+      const mutable = [sampleJwk];
+      await cache.set('url', mutable, 60);
+      mutable.push({ ...sampleJwk, kid: 'svc-injected' }); // mutate post-set
+      const got1 = await cache.get('url');
+      expect(got1).toEqual([sampleJwk]); // store-side copy isolates
+      got1!.push({ ...sampleJwk, kid: 'svc-mutated-on-read' });
+      const got2 = await cache.get('url');
+      expect(got2).toEqual([sampleJwk]); // get-side copy isolates
+    });
   });
 
   describe('LruJwksCache', () => {
@@ -165,6 +177,18 @@ describe('@freeside-auth/auth-sdk — JwksCache concrete impls', () => {
       await cache.set('url-16', [sampleJwk], 3600);
       expect(await cache.get('url-0')).toBeNull();
       expect(await cache.get('url-1')).not.toBeNull();
+    });
+
+    it('defensive-copies on set + get (mirrors InMemoryJwksCache)', async () => {
+      const cache = new LruJwksCache({ maxEntries: 4 });
+      const mutable = [sampleJwk];
+      await cache.set('url', mutable, 60);
+      mutable.push({ ...sampleJwk, kid: 'svc-injected' });
+      const got1 = await cache.get('url');
+      expect(got1).toEqual([sampleJwk]);
+      got1!.push({ ...sampleJwk, kid: 'svc-mutated-on-read' });
+      const got2 = await cache.get('url');
+      expect(got2).toEqual([sampleJwk]);
     });
   });
 });

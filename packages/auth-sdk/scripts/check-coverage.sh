@@ -33,12 +33,9 @@ output="$(bun test --coverage packages/auth-sdk 2>&1)"
 #   File path                           |   % Lines |   % Funcs | Uncovered lines
 #   packages/auth-sdk/src/x.ts          |    93.10  |   100.00  | 1,5
 #
-# We grep for rows under `packages/auth-sdk/src/` and pull the % Lines column.
-
-# shellcheck disable=SC2207
-auth_sdk_rows=( $(echo "${output}" | grep -E "^\s+${PACKAGE_PREFIX}" || true) )
-
-if [[ ${#auth_sdk_rows[@]} -eq 0 ]]; then
+# Count matching rows up-front; fail fast if the table format changed.
+row_count="$(echo "${output}" | grep -cE "^\s+${PACKAGE_PREFIX}" || true)"
+if [[ "${row_count}" -eq 0 ]]; then
   # No rows means coverage didn't include auth-sdk files — either the test
   # didn't import them or bun's table format changed.
   echo "ERROR: no coverage rows found under ${PACKAGE_PREFIX}" >&2

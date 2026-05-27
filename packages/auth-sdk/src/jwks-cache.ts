@@ -72,8 +72,11 @@ export class InMemoryJwksCache implements SvcJwtJwksCache {
   }
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {
+    // Defensive copy on STORE so a caller mutating their array after
+    // set() cannot retroactively poison the cache (mirrors the slice()
+    // on get(); the cache owns its own copy in either direction).
     this.entries.set(url, {
-      keys,
+      keys: keys.slice(),
       expiresAt: this.nowFn() + ttlSec * 1000,
     });
   }
@@ -125,7 +128,8 @@ export class LruJwksCache implements SvcJwtJwksCache {
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {
     this.entries.delete(url);
-    this.entries.set(url, { keys, expiresAt: this.nowFn() + ttlSec * 1000 });
+    // Defensive store-side copy (mirrors InMemoryJwksCache.set).
+    this.entries.set(url, { keys: keys.slice(), expiresAt: this.nowFn() + ttlSec * 1000 });
     while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next().value;
       if (oldest === undefined) break;

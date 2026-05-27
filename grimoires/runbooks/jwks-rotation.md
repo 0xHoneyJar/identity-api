@@ -87,8 +87,14 @@ Option A — using openssl (works anywhere openssl is installed):
     -out "${KEY_FILE}"
 )
 
-# Sanity: should print "id-ecPublicKey ... P-256"
-openssl pkey -in "${KEY_FILE}" -text -noout | head -10
+# Sanity: print ONLY the public-key + curve metadata. `-text -noout`
+# would dump the FULL private key to stdout — never do that (terminal
+# scrollback, ssh recording, sudo logs, screen-share readback all leak
+# the signing key). `-text_pub` (openssl 3.x) prints just the public
+# half; if your openssl is older, derive + inspect the public key.
+openssl pkey -in "${KEY_FILE}" -text_pub -noout 2>/dev/null \
+  | head -10 \
+  || openssl pkey -in "${KEY_FILE}" -pubout -text -noout | head -10
 ```
 
 Option B — using Bun + jose (matches what `LocalEs256Signer` will consume):
@@ -122,17 +128,44 @@ echo "pem=${KEY_FILE}"
 
 ### Step 2 — promote the current key to PREV slot
 
-Record current key + kid values before overwriting (you'll set both
-env vars in step 3 atomically):
+Record current key + kid values to a private staging file so the
+operator can paste them into the deploy provider's secret-input UI
+without the PEM ever hitting terminal stdout, scrollback, or ssh
+session recording.
 
 ```bash
-# Capture current values from your deploy provider (Railway/Fly/etc.)
-# Example for Railway:
-railway variables --service identity-api --kv \
-  | grep -E '^SVC_JWT_SIGNING_KEY_(PEM|KID)='
+# Stash current values into the private key staging dir (mode 0700 from
+# Step 1). The (umask 077; ...) subshell + explicit > redirect keeps the
+# capture out of stdout — no terminal/scrollback exposure.
+PREV_CAPTURE="${KEY_DIR}/svc-jwt-prev-capture-$(date -u +%Y%m%dT%H%M%SZ).env"
+(
+  umask 077
+  railway variables --service identity-api --kv \
+    | grep -E '^SVC_JWT_SIGNING_KEY_(PEM|KID)=' > "${PREV_CAPTURE}"
+)
+
+# Confirm capture mode is 0600
+actual_mode="$(stat -c '%a' "${PREV_CAPTURE}" 2>/dev/null || stat -f '%Lp' "${PREV_CAPTURE}")"
+[[ "${actual_mode}" == "600" ]] || { echo "ABORT: prev capture mode ${actual_mode}" >&2; exit 1; }
+
+# Optional: confirm the file contains both vars without printing values
+grep -c '^SVC_JWT_SIGNING_KEY_PEM=' "${PREV_CAPTURE}"      # expect: 1
+grep -c '^SVC_JWT_SIGNING_KEY_KID=' "${PREV_CAPTURE}"      # expect: 1
+
+echo "Previous key captured to: ${PREV_CAPTURE}"
+echo "Paste contents into deploy provider's PREV vars in Step 3 — do NOT cat it."
 ```
 
-Set in your deploy provider:
+> **Why the file instead of `--kv | grep` to terminal**: piping the
+> output to stdout literally writes `SVC_JWT_SIGNING_KEY_PEM=<PEM>` to
+> the operator's terminal — recorded in shell scrollback, `script`
+> session captures, ssh recording sidecars, screen-share readback. Any
+> of those routes the PEM into a place the rotation procedure was
+> trying to protect it from. Capturing to a 0600 file keeps the PEM in
+> the same `${KEY_DIR}` privacy boundary as the new key.
+
+Set in your deploy provider (paste from `${PREV_CAPTURE}` into the
+secret-input UI — most providers offer a "paste from file" mode):
 
 ```
 SVC_JWT_SIGNING_KEY_PEM_PREV = <current SVC_JWT_SIGNING_KEY_PEM value>
@@ -145,12 +178,23 @@ SVC_JWT_SIGNING_KEY_KID_PREV = <current SVC_JWT_SIGNING_KEY_KID value>
 
 ### Step 3 — set the new key as current
 
-Set in your deploy provider:
+Set in your deploy provider (paste from `${KEY_FILE}` — Step 1's path,
+NOT `/tmp`):
 
 ```
-SVC_JWT_SIGNING_KEY_PEM = <contents of /tmp/svc-jwt-${NEW_KID}.pkcs8.pem>
+SVC_JWT_SIGNING_KEY_PEM = <contents of ${KEY_FILE}>
 SVC_JWT_SIGNING_KEY_KID = ${NEW_KID}
 ```
+
+Where:
+- `${KEY_FILE}` = `${KEY_DIR}/svc-jwt-${NEW_KID}.pkcs8.pem` (per Step 1)
+- `${KEY_DIR}` = `${HOME}/.cache/freeside-auth/svc-keys`
+
+Most deploy providers accept multi-line env values through their
+secret-input UI; if yours requires a single-line PEM, use the
+provider-native CLI's file-input flag (e.g., `railway variables --set
+SVC_JWT_SIGNING_KEY_PEM=@${KEY_FILE}`) instead of piping the PEM
+through your shell.
 
 Trigger redeploy. Wait for healthy status.
 
