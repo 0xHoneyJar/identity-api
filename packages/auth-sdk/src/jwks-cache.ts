@@ -12,6 +12,11 @@
  *     federate across multiple identity issuers (rare today; useful
  *     when a cell talks to identity-api + a partner-cluster JWKS).
  *
+ * Both impls share `_readFresh` (expiry check + lazy delete + defensive
+ * get-copy) and `_writeEntry` (defensive set-copy + expiry stamp) so a
+ * fix to one path applies to both. The LRU touch + bounded eviction are
+ * the only behaviors specific to `LruJwksCache`.
+ *
  * Both impls honor the per-entry `ttlSec` passed to `set()`. The verifier
  * passes `JWKS_CACHE_TTL_SEC = 3600` (1h). Operators tuning for higher
  * rotation cadence can pass a smaller value.
@@ -37,6 +42,48 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+// ─── Shared helpers (dedup of expiry check + defensive copy) ───────────
+
+/**
+ * Returns a fresh shallow-copied keys array for `url` or null if absent
+ * or expired. Lazy-evicts the entry on expiry. The shallow copy isolates
+ * the cache from caller-side mutation of the returned array.
+ */
+function _readFresh(
+  entries: Map<string, CacheEntry>,
+  url: string,
+  nowFn: () => number,
+): JWK[] | null {
+  const entry = entries.get(url);
+  if (!entry) return null;
+  if (entry.expiresAt <= nowFn()) {
+    entries.delete(url);
+    return null;
+  }
+  return entry.keys.slice();
+}
+
+/**
+ * Stores a shallow-copied entry for `url`. The store-side copy isolates
+ * the cache from caller-side mutation of the input array after `set()`.
+ * Callers that need a different positional behavior (e.g., LRU's
+ * delete-then-set sequence) handle that BEFORE invoking this helper.
+ */
+function _writeEntry(
+  entries: Map<string, CacheEntry>,
+  url: string,
+  keys: JWK[],
+  ttlSec: number,
+  nowFn: () => number,
+): void {
+  entries.set(url, {
+    keys: keys.slice(),
+    expiresAt: nowFn() + ttlSec * 1000,
+  });
+}
+
+// ─── Public types ──────────────────────────────────────────────────────
+
 export interface JwksCacheOptions {
   /** Test-injectable clock (ms). Default: `Date.now()`. */
   now?: () => number;
@@ -58,27 +105,11 @@ export class InMemoryJwksCache implements SvcJwtJwksCache {
   }
 
   async get(url: string): Promise<JWK[] | null> {
-    const entry = this.entries.get(url);
-    if (!entry) return null;
-    if (entry.expiresAt <= this.nowFn()) {
-      this.entries.delete(url);
-      return null;
-    }
-    // Shallow-copy so a caller mutating the returned array (or jose helpers
-    // doing so under the hood) cannot corrupt the cached entry for future
-    // hits. Individual JWK objects are still shared — jose treats them as
-    // immutable internally.
-    return entry.keys.slice();
+    return _readFresh(this.entries, url, this.nowFn);
   }
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {
-    // Defensive copy on STORE so a caller mutating their array after
-    // set() cannot retroactively poison the cache (mirrors the slice()
-    // on get(); the cache owns its own copy in either direction).
-    this.entries.set(url, {
-      keys: keys.slice(),
-      expiresAt: this.nowFn() + ttlSec * 1000,
-    });
+    _writeEntry(this.entries, url, keys, ttlSec, this.nowFn);
   }
 }
 
@@ -113,23 +144,22 @@ export class LruJwksCache implements SvcJwtJwksCache {
   }
 
   async get(url: string): Promise<JWK[] | null> {
+    const fresh = _readFresh(this.entries, url, this.nowFn);
+    if (fresh === null) return null;
+    // LRU touch: re-insert the entry to move it to the recent end.
+    // _readFresh returned a shallow COPY but the source entry is still
+    // in the map; re-read + delete + set to refresh ordering.
     const entry = this.entries.get(url);
-    if (!entry) return null;
-    if (entry.expiresAt <= this.nowFn()) {
+    if (entry) {
       this.entries.delete(url);
-      return null;
+      this.entries.set(url, entry);
     }
-    this.entries.delete(url);
-    this.entries.set(url, entry);
-    // Shallow-copy so callers cannot mutate the cached array (see
-    // InMemoryJwksCache.get for the same rationale).
-    return entry.keys.slice();
+    return fresh;
   }
 
   async set(url: string, keys: JWK[], ttlSec: number): Promise<void> {
     this.entries.delete(url);
-    // Defensive store-side copy (mirrors InMemoryJwksCache.set).
-    this.entries.set(url, { keys: keys.slice(), expiresAt: this.nowFn() + ttlSec * 1000 });
+    _writeEntry(this.entries, url, keys, ttlSec, this.nowFn);
     while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next().value;
       if (oldest === undefined) break;

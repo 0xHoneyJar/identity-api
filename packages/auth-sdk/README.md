@@ -78,12 +78,20 @@ re-export chain ends here):
 ```bash
 VENDOR=/path/to/your-app/src/vendor
 
-# auth-sdk itself — copy CONTENTS of src/ into auth-sdk/ (the `/.` after
-# src skips the directory and copies its children, so the vendored
-# layout ends up as auth-sdk/index.ts NOT auth-sdk/src/index.ts; this
-# matches the import shape `from '@/vendor/auth-sdk'` below).
+# auth-sdk itself — copy CONTENTS of src/ EXCLUDING __tests__/ into
+# auth-sdk/. The `/.` after src skips the directory and copies its
+# children, so the vendored layout ends up as auth-sdk/index.ts NOT
+# auth-sdk/src/index.ts (matching the import shape `from '@/vendor/auth-sdk'`
+# below). The rsync excludes __tests__ — those import `bun:test` and
+# would break typecheck on non-Bun consumers (Node, Deno, browser).
+# Consumers wanting the conformance suite re-run it via the runtime
+# `runConformanceSuite()` callable — they do NOT need to vendor the
+# bun-specific test wrappers.
 mkdir -p "${VENDOR}/auth-sdk"
-cp -R /tmp/identity-api/packages/auth-sdk/src/. "${VENDOR}/auth-sdk/"
+rsync -a --exclude '__tests__/' /tmp/identity-api/packages/auth-sdk/src/ "${VENDOR}/auth-sdk/"
+# If rsync is unavailable, the cp-then-remove equivalent:
+#   cp -R /tmp/identity-api/packages/auth-sdk/src/. "${VENDOR}/auth-sdk/"
+#   rm -rf "${VENDOR}/auth-sdk/__tests__"
 
 # Transitive: protocol (svc-jwt-claims Effect.Schema)
 mkdir -p "${VENDOR}/auth-protocol"
@@ -94,12 +102,12 @@ mkdir -p "${VENDOR}/auth-adapters"
 cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts "${VENDOR}/auth-adapters/"
 ```
 
-After this step the vendored tree should look like:
+After this step the vendored tree should look like (note: NO
+`__tests__/` directory — those are excluded for non-Bun portability):
 
 ```
 src/vendor/
 ├── auth-sdk/
-│   ├── __tests__/
 │   ├── conformance/
 │   ├── index.ts
 │   ├── jwks-cache.ts

@@ -348,17 +348,26 @@ If the **current** signing key is suspected compromised:
 
 ### Step E1 — deny the compromised kid cluster-wide
 
-Insert a denylist rule covering EVERY JWT signed by the compromised kid:
+Insert a denylist rule covering EVERY JWT signed by the compromised kid.
+**Do NOT copy this snippet verbatim** — set the three operator-supplied
+variables first; the heredoc is `<<SQL` (no quotes) so the variables
+expand:
 
 ```bash
-# Connect to identity-api Postgres
-psql "${IDENTITY_DB_URL}" <<'SQL'
+# REQUIRED: name the actually-compromised kid, your incident ID, and a
+# UTC timestamp for the audit reason. The `:?` aborts if any is unset.
+COMPROMISED_KID="${COMPROMISED_KID:?Set COMPROMISED_KID to the actually-compromised kid, e.g. svc-2026-04-12-a}"
+INCIDENT_ID="${INCIDENT_ID:?Set INCIDENT_ID to your tracker reference, e.g. INC-2026-05-26-001}"
+INCIDENT_TIME="${INCIDENT_TIME:-$(date -u +%Y-%m-%dT%H:%MZ)}"
+
+# Connect to identity-api Postgres — variables expand BEFORE psql runs.
+psql "${IDENTITY_DB_URL}" <<SQL
 INSERT INTO service_jwt_denylist (kid, jti, sub, reason, rule_id, created_at)
 VALUES (
-  'svc-2026-04-12-a',   -- the compromised kid
-  NULL,                 -- jti=NULL → wildcard (every JWT with this kid)
-  NULL,                 -- sub=NULL → wildcard (every calling cell)
-  'compromise:2026-05-26T15:00Z incident-001',
+  '${COMPROMISED_KID}',   -- the actually-compromised kid
+  NULL,                   -- jti=NULL → wildcard (every JWT with this kid)
+  NULL,                   -- sub=NULL → wildcard (every calling cell)
+  'compromise:${INCIDENT_TIME} ${INCIDENT_ID}',
   'rule-compromise-' || gen_random_uuid()::text,
   now()
 );
@@ -366,7 +375,7 @@ SQL
 ```
 
 Per D-1.1 §6, this rule is CONJUNCTIVE null-as-wildcard: every JWT
-matching `kid = 'svc-2026-04-12-a'` is denied regardless of jti / sub.
+matching `kid = '${COMPROMISED_KID}'` is denied regardless of jti / sub.
 Verifiers fail-CLOSED on the next denylist refresh.
 
 ### Step E2 — execute steps 1-9 above
@@ -388,11 +397,16 @@ BEFORE Step 3.
 
 After Step 9 (old kid dropped from JWKS), the denylist rule is
 redundant — no key under that kid exists in the trust set. Remove the
-rule to keep the denylist table clean:
+rule to keep the denylist table clean. Find the exact rule_id from
+Step E1's INSERT (it was `'rule-compromise-' || <uuid>`), or DELETE by
+the unique `(kid, reason)` shape:
 
 ```bash
+COMPROMISED_KID="${COMPROMISED_KID:?Set COMPROMISED_KID to the kid from Step E1}"
 psql "${IDENTITY_DB_URL}" -c \
-  "DELETE FROM service_jwt_denylist WHERE rule_id = 'rule-compromise-...';"
+  "DELETE FROM service_jwt_denylist
+     WHERE kid = '${COMPROMISED_KID}'
+       AND rule_id LIKE 'rule-compromise-%';"
 ```
 
 ## Independence from user-JWT rotation

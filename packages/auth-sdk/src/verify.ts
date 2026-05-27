@@ -7,8 +7,12 @@
  *
  * Per the build doc anti-pattern ban: NO inlining of implementation here.
  * If a consumer vendors `auth-sdk/src/`, they MUST also vendor the
- * transitive `adapters/src/svc-jwt-verifier.ts` + `denylist-postgres.ts`.
- * See registry.json #transitive.
+ * transitive `adapters/src/svc-jwt-verifier.ts`. See registry.json
+ * `#transitive` (`denylist-postgres.ts` is `#optional_transitive` —
+ * the auth-sdk only re-exports the `DenylistCheck` *interface*; the
+ * Postgres impl is OPTIONAL convenience for cells with direct PG
+ * access. Most cells BYO their own `DenylistCheck` impl, typically
+ * over HTTP to `POST /v1/auth/denylist/check`).
  *
  * Spec: `grimoires/svc-jwt-spec.md` §5 (D-1.1 10-step verify pipeline) +
  * §6 (denylist CONJUNCTIVE null-as-wildcard match).

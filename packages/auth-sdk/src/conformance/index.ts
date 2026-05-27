@@ -246,18 +246,54 @@ async function executeScenario(
   let message: string | undefined;
   let ruleId: string | undefined;
   let raw: SvcJwtVerifyResult | undefined;
+  let jwt: string | undefined;
+  let opts: SvcJwtVerifyOpts | undefined;
 
+  // Stage 1: build fixtures via spec.run(). A throw here is a SETUP
+  // failure (the harness couldn't mint a JWT or build opts) — distinct
+  // from a verifier-side throw, and reported as such for clear CI
+  // diagnostics. The total-function guarantee is for `verifier()`, not
+  // for the suite's own setup.
   try {
-    const { jwt, opts } = await spec.run(harness);
+    const r = await spec.run(harness);
+    jwt = r.jwt;
+    opts = r.opts;
+  } catch (err) {
+    actual = 'THREW';
+    message =
+      err instanceof Error
+        ? `suite setup threw (spec.run): ${err.message}`
+        : 'suite setup threw (non-Error)';
+    return {
+      name: spec.name,
+      expected: spec.expected,
+      actual,
+      pass: false,
+      message,
+    };
+  }
+
+  // Stage 2: invoke the verifier. A throw here violates the total-
+  // function guarantee per D-1.1; the suite captures it and labels
+  // `actual: 'THREW'` so the failure is visible and bound to the
+  // verifier (not to the suite's fixtures).
+  try {
     raw = await verifier(jwt, opts);
     actual = classify(raw);
     if (raw.ok === false) {
       message = raw.message;
       ruleId = raw.ruleId;
+    } else if (verbose) {
+      // Verbose mode: pin the contract that passing scenarios also
+      // carry a diagnostic message (helps downstream CI logs).
+      message = 'ok';
     }
   } catch (err) {
     actual = 'THREW';
-    message = err instanceof Error ? `verifier threw: ${err.message}` : 'verifier threw (non-Error)';
+    message =
+      err instanceof Error
+        ? `verifier threw: ${err.message}`
+        : 'verifier threw (non-Error)';
   }
 
   const pass = actual === spec.expected;
@@ -267,12 +303,16 @@ async function executeScenario(
   }
 
   const finalPass = pass && postCheckMessage === undefined;
+  // verbose: surface diagnostic message even on PASS (postCheck wins if
+  // populated; otherwise the regular message). Default: suppress
+  // message on success to keep CI logs quiet.
+  const surfacedMessage = !finalPass || verbose ? (postCheckMessage ?? message) : undefined;
   return {
     name: spec.name,
     expected: spec.expected,
     actual,
     pass: finalPass,
-    message: finalPass && !verbose ? undefined : (postCheckMessage ?? message),
+    message: surfacedMessage,
     ruleId,
   };
 }

@@ -33,8 +33,11 @@ output="$(bun test --coverage packages/auth-sdk 2>&1)"
 #   File path                           |   % Lines |   % Funcs | Uncovered lines
 #   packages/auth-sdk/src/x.ts          |    93.10  |   100.00  | 1,5
 #
+# Use POSIX character classes `[[:space:]]` instead of `\s` — BSD grep
+# (macOS default) does NOT honor `\s` in BRE/ERE, only `[[:space:]]`.
 # Count matching rows up-front; fail fast if the table format changed.
-row_count="$(echo "${output}" | grep -cE "^\s+${PACKAGE_PREFIX}" || true)"
+row_pattern="^[[:space:]]+${PACKAGE_PREFIX}"
+row_count="$(echo "${output}" | grep -cE "${row_pattern}" || true)"
 if [[ "${row_count}" -eq 0 ]]; then
   # No rows means coverage didn't include auth-sdk files — either the test
   # didn't import them or bun's table format changed.
@@ -44,8 +47,22 @@ if [[ "${row_count}" -eq 0 ]]; then
   exit 2
 fi
 
+# Enumerate the on-disk src/*.ts files separately. Bun's coverage table
+# only lists files that were transitively imported during the test run;
+# a new file with NO test importing it would not appear in the table
+# AND would silently slip past the gate. We cross-check the file list
+# against the bun-reported rows below and FAIL if any on-disk source
+# file is missing from the coverage report.
+mapfile -t disk_files < <(
+  find "${REPO_ROOT}/packages/auth-sdk/src" -type f -name '*.ts' \
+    -not -path '*/__tests__/*' \
+    | sed "s|^${REPO_ROOT}/||" \
+    | sort
+)
+
 failures=0
 total_files=0
+declare -A seen_in_report
 
 # Parse line-by-line. The table format is:
 #   <whitespace><filepath><whitespace>|<whitespace>NN.NN<whitespace>|<whitespace>NN.NN<whitespace>|<rest>
@@ -60,6 +77,7 @@ while IFS= read -r line; do
   fi
 
   total_files=$((total_files + 1))
+  seen_in_report["${filepath}"]=1
   # Use awk for float comparison (bash builtins do integers only)
   below="$(awk -v p="${pct_lines}" -v t="${THRESHOLD_LINES}" 'BEGIN { print (p < t) ? "yes" : "no" }')"
   if [[ "${below}" == "yes" ]]; then
@@ -68,7 +86,18 @@ while IFS= read -r line; do
   else
     echo "PASS: ${filepath} = ${pct_lines}% lines"
   fi
-done < <(echo "${output}" | grep -E "^\s+${PACKAGE_PREFIX}")
+done < <(echo "${output}" | grep -E "${row_pattern}")
+
+# Cross-check on-disk files vs the bun-reported set. Any file on disk
+# but missing from the report = untested file slipping through.
+missing_count=0
+for disk_file in "${disk_files[@]}"; do
+  if [[ -z "${seen_in_report[${disk_file}]:-}" ]]; then
+    echo "FAIL: ${disk_file} on disk but absent from coverage report (zero test coverage)" >&2
+    missing_count=$((missing_count + 1))
+  fi
+done
+failures=$((failures + missing_count))
 
 echo ""
 echo "auth-sdk coverage gate:"
