@@ -1,0 +1,119 @@
+{
+  "$schema": "https://0xhoneyjar.github.io/freeside-network/schemas/vendor-registry.schema.json",
+  "id": "auth-sdk",
+  "name": "@freeside-auth/auth-sdk",
+  "vendored_alias": "@0xhoneyjar/auth",
+  "version": "0.1.0",
+  "kind": "source-distributed",
+  "description": "svc-JWT verifier SDK. Cell-side typed verification + 21-scenario substrate-grade conformance suite. Source-distributed per PRD v3.0 §11.",
+  "upstream": {
+    "repo": "https://github.com/0xHoneyJar/identity-api",
+    "package_path": "packages/auth-sdk"
+  },
+  "files": [
+    "src/index.ts",
+    "src/verify.ts",
+    "src/svc-jwt-claims.ts",
+    "src/jwks-cache.ts",
+    "src/conformance/index.ts"
+  ],
+  "transitive": [
+    {
+      "package": "@freeside-auth/protocol",
+      "files": ["src/svc-jwt-claims.ts"],
+      "reason": "auth-sdk's ./svc-jwt-claims re-exports the canonical Effect.Schema artifacts from this file"
+    },
+    {
+      "package": "@freeside-auth/adapters",
+      "files": [
+        "src/svc-jwt-verifier.ts",
+        "src/denylist-postgres.ts",
+        "src/argon2-params.ts"
+      ],
+      "reason": "auth-sdk's ./verify re-exports verifySvcJwt + verifier types from svc-jwt-verifier.ts; PostgresDenylistCheck (used as the DenylistCheck impl in production) lives in denylist-postgres.ts; argon2-params.ts is pulled in via the adapters barrel's IArgon2idVerifier type alias"
+    }
+  ],
+  "peer_deps": {
+    "@effect/schema": "^0.75",
+    "effect": "^3.10.0",
+    "jose": "^6.0.0"
+  },
+  "post_vendor": {
+    "import_rewrites": [
+      {
+        "from": "@freeside-auth/protocol",
+        "to_template": "<vendor-base>/auth-protocol/svc-jwt-claims",
+        "reason": "auth-sdk imports the protocol package via the workspace alias; vendored consumers don't have the alias — point at the copied source"
+      },
+      {
+        "from": "@freeside-auth/adapters",
+        "to_template": "<vendor-base>/auth-adapters/svc-jwt-verifier",
+        "reason": "same — workspace alias must be rewritten to the copied source path"
+      }
+    ],
+    "verification_steps": [
+      "1. Run `tsc --noEmit` on the consumer to confirm typecheck clean.",
+      "2. Run the conformance suite: `import { runConformanceSuite } from '<vendor-base>/auth-sdk'; await runConformanceSuite()` — assert `result.ok === true`.",
+      "3. Confirm `result.total >= 21` (substrate-grade gate)."
+    ]
+  },
+  "compose_with": [
+    {
+      "id": "identity-client",
+      "name": "@freeside-auth/identity-client",
+      "reason": "sibling source-distributed SDK — typed HTTP client for identity-api. Coexists with auth-sdk; the two have different concerns (HTTP surface vs crypto/verify). Many consumers vendor BOTH."
+    }
+  ],
+  "manual_recipe": {
+    "shell": [
+      "# 1. Clone identity-api at a pinned SHA",
+      "git clone https://github.com/0xHoneyJar/identity-api.git /tmp/identity-api",
+      "git -C /tmp/identity-api checkout <commit-sha>",
+      "",
+      "# 2. Copy auth-sdk source + transitive deps into your consumer",
+      "VENDOR=/path/to/your-app/src/vendor",
+      "mkdir -p $VENDOR/auth-sdk $VENDOR/auth-protocol $VENDOR/auth-adapters",
+      "cp -R /tmp/identity-api/packages/auth-sdk/src/ $VENDOR/auth-sdk/",
+      "cp /tmp/identity-api/packages/protocol/src/svc-jwt-claims.ts $VENDOR/auth-protocol/",
+      "cp /tmp/identity-api/packages/adapters/src/svc-jwt-verifier.ts $VENDOR/auth-adapters/",
+      "cp /tmp/identity-api/packages/adapters/src/denylist-postgres.ts $VENDOR/auth-adapters/",
+      "cp /tmp/identity-api/packages/adapters/src/argon2-params.ts $VENDOR/auth-adapters/",
+      "",
+      "# 3. Rewrite workspace aliases to vendored paths",
+      "find $VENDOR/auth-sdk -name '*.ts' -exec sed -i.bak \\",
+      "  -e 's|@freeside-auth/protocol|../auth-protocol/svc-jwt-claims|g' \\",
+      "  -e 's|@freeside-auth/adapters|../auth-adapters/svc-jwt-verifier|g' {} \\;",
+      "find $VENDOR -name '*.bak' -delete",
+      "",
+      "# 4. Install peer dependencies in your consumer's package.json",
+      "#    \"@effect/schema\": \"^0.75\", \"effect\": \"^3.10.0\", \"jose\": \"^6.0.0\"",
+      "",
+      "# 5. Run the conformance suite to confirm the vendored copy is intact",
+      "bun test  # expects runConformanceSuite() ok===true"
+    ]
+  },
+  "cli_recipe": {
+    "command": "freeside-cli vendor add auth-sdk",
+    "status": "forward-track",
+    "note": "The freeside-cli vendor-add command is not yet implemented as of W2.5 Sprint 3. Use the manual_recipe.shell steps above. When the CLI lands, this single command will execute all 5 manual steps idempotently."
+  },
+  "conformance": {
+    "callable": "import { runConformanceSuite } from '@0xhoneyjar/auth'; const r = await runConformanceSuite();",
+    "scenarios": 21,
+    "description": "Substrate-grade gate per PRD NF-Sec-1. 11 D-1.1 §8 canonical + 6 fuzz + 4 order-of-ops invariants. Downstream cells MUST re-run this suite in their CI; any scenario failure blocks merge across the cluster."
+  },
+  "license": "MIT",
+  "authored": "2026-05-26",
+  "authored_by": "W2.5 Sprint 3 — code-implement-and-review composition",
+  "changelog": [
+    {
+      "version": "0.1.0",
+      "date": "2026-05-26",
+      "changes": [
+        "Initial registry entry. Files + transitive + peer_deps shape codified.",
+        "Sibling pattern documented (identity-client coexistence).",
+        "Manual recipe authored; freeside-cli automation marked forward-track."
+      ]
+    }
+  ]
+}
