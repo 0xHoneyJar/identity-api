@@ -59,6 +59,21 @@ export interface SpineWorldIdentity {
 }
 
 /**
+ * Single world_managers row as the spine sees it (C-2).
+ *
+ * One edge in the CM→world authorization relation: the user (the row's
+ * `user_id`, implied by the query) manages `world_slug`, granted at
+ * `granted_at`. The `granted_by` provenance column is NOT surfaced on this
+ * read shape — the management-resolution read answers "which worlds" + "since
+ * when", not "by whom" (the granter is an audit/admin concern, exposed by a
+ * future admin surface if needed).
+ */
+export interface SpineManagedWorld {
+  readonly world_slug: string
+  readonly granted_at: string
+}
+
+/**
  * Composite identity (FR-R4 return shape) — a user + all their bindings.
  * Used by `getIdentity` and consumed by `getProfile` (T2.3) to seed the
  * read-time compose.
@@ -204,6 +219,26 @@ export interface SpinePort {
   ): Promise<string | null>
   resolveByNym(worldSlug: string, nym: string): Promise<string | null>
   getIdentity(userId: string): Promise<SpineIdentityShape | null>
+
+  /**
+   * C-2 (bead arrakis-491i): resolve the worlds a user MANAGES.
+   *
+   * Reads the `world_managers` relation (migration 0007) — the SoR for "who
+   * manages which world." Returns one entry per management edge, ordered by
+   * `granted_at` ASC (stable, oldest-grant-first). An empty array means the
+   * user manages no worlds (NOT an error — a non-manager is a valid state);
+   * this method NEVER returns `null` and never throws on the empty path.
+   *
+   * Consumed by GET /v1/users/:id/managed-worlds, which freeside-config (C-1)
+   * calls to authorize a community-manager theme write.
+   *
+   * NOTE: this does NOT validate that `userId` exists in `users` — a
+   * non-existent user simply manages zero worlds (the FK guarantees no
+   * management edge can reference a missing user, so the result is naturally
+   * empty). Callers that need a 404 on "no such user" must resolve identity
+   * separately (e.g. via getIdentity).
+   */
+  getManagedWorlds(userId: string): Promise<readonly SpineManagedWorld[]>
 
   // writes (FR-R6)
   mintUser(): Promise<string>
