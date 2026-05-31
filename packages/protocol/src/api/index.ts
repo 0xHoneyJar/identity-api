@@ -66,6 +66,14 @@ export {
   type LinkVerifiedWalletConflict,
 } from "./link"
 
+// ─── CM→world authorization read (C-2 · bead arrakis-491i) ───────────────────
+export {
+  ManagedWorldSchema,
+  ManagedWorldsRespSchema,
+  type ManagedWorld,
+  type ManagedWorldsResp,
+} from "./users"
+
 // ─── federation contracts (T2.1) ────────────────────────────────────────────
 //
 // Cross-building wire shapes consumed by identity-api's /v1/profile read-time

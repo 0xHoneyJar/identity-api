@@ -57,6 +57,7 @@ async function dropAllSpineState(sql: SQL): Promise<void> {
     DROP FUNCTION IF EXISTS sync_primary_wallet();
     DROP TABLE IF EXISTS auth_nonces CASCADE;
     DROP TABLE IF EXISTS audit_events CASCADE;
+    DROP TABLE IF EXISTS world_managers CASCADE;
     DROP TABLE IF EXISTS world_identity CASCADE;
     DROP TABLE IF EXISTS worlds CASCADE;
     DROP TABLE IF EXISTS linked_accounts CASCADE;
@@ -70,7 +71,7 @@ async function clearWritableTables(sql: SQL): Promise<void> {
   // Truncate between tests so we don't leak state. CASCADE clears child
   // tables; we keep the worlds row(s) we seed for nym tests.
   await sql.unsafe(`
-    TRUNCATE world_identity, linked_accounts, wallet_links, audit_events, users, auth_nonces
+    TRUNCATE world_managers, world_identity, linked_accounts, wallet_links, audit_events, users, auth_nonces
     RESTART IDENTITY CASCADE;
   `)
 }
@@ -459,5 +460,85 @@ describe.skipIf(!TEST_DATABASE_URL)("PostgresSpineAdapter (T1.5)", () => {
     } finally {
       await sql.close()
     }
+  })
+
+  // ── C-2 getManagedWorlds (bead arrakis-491i) ───────────────────────────
+  //
+  // Grant-issuance is OUT OF SCOPE (no write port method) — so these tests
+  // seed `world_managers` rows directly via SQL, then assert the read path.
+  // The worlds "thj" + "mibera" are seeded by the afterEach re-seed.
+
+  async function grantManager(
+    userId: string,
+    worldSlug: string,
+    grantedBy: string | null = "test-operator",
+  ): Promise<void> {
+    const sql = new SQL(databaseUrl)
+    try {
+      await sql`
+        INSERT INTO world_managers (user_id, world_slug, granted_by)
+        VALUES (${userId}, ${worldSlug}, ${grantedBy})
+      `
+    } finally {
+      await sql.close()
+    }
+  }
+
+  it("getManagedWorlds returns [] for a user that manages nothing (C-2)", async () => {
+    const userId = await spine.mintUser()
+    const got = await spine.getManagedWorlds(userId)
+    expect(got).toEqual([])
+  })
+
+  it("getManagedWorlds returns [] for a non-existent user (no 404 at this layer) (C-2)", async () => {
+    const got = await spine.getManagedWorlds("00000000-0000-4000-8000-000000000000")
+    expect(got).toEqual([])
+  })
+
+  it("getManagedWorlds returns each managed world, granted_at ASC (C-2)", async () => {
+    const userId = await spine.mintUser()
+    await grantManager(userId, "thj")
+    await grantManager(userId, "mibera")
+    const got = await spine.getManagedWorlds(userId)
+    expect(got).toHaveLength(2)
+    const slugs = got.map((w) => w.world_slug)
+    expect(slugs).toContain("thj")
+    expect(slugs).toContain("mibera")
+    // granted_at present + ASC-ordered (oldest first; both default NOW()).
+    expect(typeof got[0]!.granted_at).toBe("string")
+    expect(got[0]!.granted_at <= got[1]!.granted_at).toBe(true)
+    // granted_by is NOT surfaced on the read shape.
+    expect(got[0]!).not.toHaveProperty("granted_by")
+  })
+
+  it("getManagedWorlds is per-user isolated (C-2)", async () => {
+    const alice = await spine.mintUser()
+    const bob = await spine.mintUser()
+    await grantManager(alice, "thj")
+    await grantManager(bob, "mibera")
+    const aliceWorlds = await spine.getManagedWorlds(alice)
+    const bobWorlds = await spine.getManagedWorlds(bob)
+    expect(aliceWorlds.map((w) => w.world_slug)).toEqual(["thj"])
+    expect(bobWorlds.map((w) => w.world_slug)).toEqual(["mibera"])
+  })
+
+  it("world_managers grant CASCADE-deletes when the user is removed (C-2 FK)", async () => {
+    const userId = await spine.mintUser()
+    await grantManager(userId, "thj")
+    expect(await spine.getManagedWorlds(userId)).toHaveLength(1)
+    const sql = new SQL(databaseUrl)
+    try {
+      await sql`DELETE FROM users WHERE user_id = ${userId}`
+    } finally {
+      await sql.close()
+    }
+    expect(await spine.getManagedWorlds(userId)).toEqual([])
+  })
+
+  it("world_managers accepts null granted_by (backfilled-provenance row) (C-2)", async () => {
+    const userId = await spine.mintUser()
+    await grantManager(userId, "thj", null)
+    const got = await spine.getManagedWorlds(userId)
+    expect(got.map((w) => w.world_slug)).toEqual(["thj"])
   })
 })

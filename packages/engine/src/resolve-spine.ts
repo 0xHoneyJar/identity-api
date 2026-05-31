@@ -41,6 +41,7 @@ import type {
   SpinePort,
   SpineLinkedAccountProvider,
   SpineIdentityShape,
+  SpineManagedWorld,
 } from "@freeside-auth/ports"
 
 // ─── reads (FR-R1..R4) ─────────────────────────────────────────────────────
@@ -84,6 +85,25 @@ export async function getIdentity(
   userId: string,
 ): Promise<SpineIdentityShape | null> {
   return spine.getIdentity(userId)
+}
+
+/**
+ * C-2 (bead arrakis-491i): resolve the worlds a user MANAGES.
+ *
+ * Thin wrapper over the port's `getManagedWorlds` — the engine seam exists
+ * so the route layer composes through the port (not the concrete adapter)
+ * and so a future tier/policy layer (e.g. world-archival filtering) has a
+ * place to live without touching the route.
+ *
+ * Returns `[]` for a non-manager (a valid state, not the 404 path — the
+ * route layer decides whether "user exists but manages nothing" is 200 + []
+ * or 404; per the C-2 contract it is 200 + []).
+ */
+export async function getManagedWorlds(
+  spine: SpinePort,
+  userId: string,
+): Promise<readonly SpineManagedWorld[]> {
+  return spine.getManagedWorlds(userId)
 }
 
 // ─── writes with audit (FR-R6 + NFR-5) ─────────────────────────────────────

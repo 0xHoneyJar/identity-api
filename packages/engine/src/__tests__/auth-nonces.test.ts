@@ -91,6 +91,10 @@ function buildMockSpine(): MockSpine {
     async getIdentity() {
       return null
     },
+    // C-2 (bead arrakis-491i): SpinePort gained getManagedWorlds; stub.
+    async getManagedWorlds() {
+      return []
+    },
     async mintUser() {
       return "00000000-0000-0000-0000-000000000001"
     },
