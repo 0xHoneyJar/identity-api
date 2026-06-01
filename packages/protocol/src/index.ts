@@ -5,10 +5,13 @@
  * consumer (worlds, ruggy, future persona-bots, dashboards, the loa-freeside
  * gateway) to a single coherent vocabulary.
  *
- * Per freeside-auth/CLAUDE.md:
- * - Schemas live here, profile DATA stays in midi (single-writer)
- * - JWKS issuance stays at loa-freeside/apps/gateway (Rust signer)
- * - This module ships VALIDATOR + claims schema, NOT a signer
+ * Per PRD v3.0 (supersedes the 2026-04 CLAUDE.md stance; see
+ * grimoires/loa/2026-06-01-auth-decision-reconciled.md):
+ * - Schemas live here; profile DATA stays in midi during cutover
+ * - JWKS issuance is the IN-REPO local ES256 signer
+ *   (packages/adapters/src/local-es256-signer.ts) serving its own JWKS;
+ *   loa-freeside/apps/gateway is a preserved delegation seam, NOT v1
+ * - This module ships claims schemas + a verifier; the signer is in-repo
  *
  * Per Lock-9 (SDD §12.7): JSON Schema (.schema.json) is the canonical
  * cross-language contract; Zod (.ts) is the TS binding. Conflicts → JSON
