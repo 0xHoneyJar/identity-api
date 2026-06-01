@@ -196,6 +196,15 @@ display_source = which tier won ("world_nym" | "discord" | "score" | "address")
 > NOT re-implement `beraname > ENS > twitter` resolution — `beraname` / `ens_name` /
 > `twitter_handle` are RAW PASSTHROUGH tooltip fields only. That chain is score-api's job
 > (score-vs-identity boundary, per repo `CLAUDE.md` hard rules).
+>
+> v2 forward-compat (per #11 comment 2026-06-01): score-api's `twitter_handle` is *scraped
+> from Dynamic* (the provider #11 replaces). When twitter becomes a first-class identity-api
+> `linked_accounts` provider (OAuth-verified, mirroring `/v1/link/discord/*`), the facade
+> SHOULD prefer the **identity-linked** twitter over the score-scraped one (verified > inferred)
+> and `display_source` gains a `"twitter"` tier above `"score"`. Design the `twitter_handle`
+> field + the priority chain so this SOURCE-FLIP is non-breaking — same field, source changes,
+> precedence shifts. v1 keeps score's value as the only twitter source; the migration to
+> score-api-as-pure-scoring stays invisible to consumers. Tracked: `bd-2wo.39`.
 
 **Discord shape:** `{ id, linked }` only — the spine has **no username/handle column**
 (`packages/adapters/src/migrations/0001_init_spine.up.sql:67-74`: `linked_accounts` is
