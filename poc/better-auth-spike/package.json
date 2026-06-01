@@ -1,0 +1,22 @@
+{
+  "name": "better-auth-spike",
+  "private": true,
+  "type": "module",
+  "description": "bd-3n1.3 code spike — boot Better Auth + SIWE + JWT + organization on Drizzle/SQLite, prove wallet-group claim",
+  "scripts": {
+    "migrate": "bun run migrate.ts",
+    "demo": "bun run demo.ts"
+  },
+  "dependencies": {
+    "better-auth": "1.6.13",
+    "better-sqlite3": "^12.0.0",
+    "drizzle-orm": "^0.45.2",
+    "siwe": "^3.0.0",
+    "viem": "^2.52.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.6.0"
+  }
+}
