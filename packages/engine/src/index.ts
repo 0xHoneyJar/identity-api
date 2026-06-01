@@ -135,3 +135,13 @@ export {
   type ConflictDecision,
   type ConflictResolver,
 } from './link-verified-wallet';
+
+// Link-verified-credential (bd-2wo.14 · Discord-social OAuth-verification
+// front-end). The SESSION-keyed sibling of linkVerifiedWallet — composes the
+// SAME resolveByAccount + linkAccountWithAudit primitives + reuses
+// LinkCrossUserCollisionError. No new minting/collision/idempotency logic.
+export {
+  linkVerifiedCredential,
+  type LinkVerifiedCredentialInput,
+  type LinkVerifiedCredentialResult,
+} from './link-verified-credential';
