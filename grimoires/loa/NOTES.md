@@ -1,5 +1,14 @@
 # Project Notes
 
+## ▶ RESUME HERE (fresh session) — build the v1 /v1/identity/resolve facade
+
+Planning gate is DONE for `bd-2wo.38` (ratified GitHub #32). Artifacts landed + committed:
+- requirements: `grimoires/loa/prd.md` (v3.0, G-5) + the ratification comment on `0xHoneyJar/identity-api#32`
+- design: `grimoires/loa/sdd.md` (feature-scoped; Phase A/B/C task breakdown; `[ASSUMPTION]` T-A1 is ALREADY grounded — score-api `POST /v1/identity/resolve` verified at `score-api/src/routes/identity.ts:27-71`)
+- bead: `bd-2wo.38` (full task spec + pinned contract)
+
+**Next:** `/sprint-plan` (consume the SDD's Phase A/B/C breakdown) → `/run sprint-N` (implement→review→audit). Two tasks: (1) `ScorePort.resolveIdentity` → score-api binding; (2) the `POST /v1/identity/resolve` route. Open design Q for the build: **OQ-5** (`reachable` tri-state as string-enum — contract window is open, cheap to confirm). Build runs PARALLEL to #11; dashboard CUTOVER stays gated on #11 P1 + world-identity backfill coverage (prod: 5 users / 3 nyms — backfill ran, coverage tiny). Held-open: per-world nym vs unified freeside-nym.
+
 ## Learnings
 
 - **2026-06-01 — the `/kickoff` brief was confabulated.** The auth-vertical kickoff (`enhance-auth-vertical-betterauth-seam.md` + `2026-06-01-auth-vertical-rescope.md`) directed "drop the hand-built canonical-user/jwks/credential-bridges, adopt Better Auth as issuer." Mechanism: `bd-2wo.1–.32` were authored 2026-05-01 as a plan, the work was then **built off-bead** (T1.x→w2.5-sprint-3, no bead lifecycle), the children stayed `open`, and the kickoff agent read open beads as an *unbuilt plan*. Lesson: **in this repo, verify shipped-vs-planned against the tree before acting on any kickoff/brief** — the beads SoT lied.
