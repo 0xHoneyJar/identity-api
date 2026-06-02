@@ -21,9 +21,36 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test"
 import type { ConsumeNonceResult, SpineIdentityShape, SpinePort } from "@freeside-auth/ports"
 import type { ResolvedIdentity } from "@freeside-auth/protocol/api/federation/score"
 import app from "../index"
+import { JWT_SECRET } from "../../auth"
 import { __resetSpineForTest, __setSpineForTest } from "../spine"
 import { __resetScoreForTest, __setScoreForTest } from "../score"
 import { MockScorePort } from "../../../packages/adapters/src/__tests__/mock-score"
+
+// HS256 JWT minter — the facade is .auth()-gated (OQ-3); G-5 evidence POSTs as
+// an authenticated caller. Mirrors routes.test.ts:113 + identity-resolve-route.test.ts.
+async function mintHs256Jwt(payload: Record<string, unknown>, secret: string): Promise<string> {
+  const enc = new TextEncoder()
+  const b64url = (s: string) => btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")
+  const data = `${b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${b64url(JSON.stringify(payload))}`
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  )
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(data))
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+  return `${data}.${sig}`
+}
+
+let authToken = ""
+function authHeaders(): Record<string, string> {
+  return { "content-type": "application/json", authorization: `Bearer ${authToken}` }
+}
 
 // ─── G-5 fixtures: four wallets, four tiers ─────────────────────────────────
 
@@ -132,11 +159,15 @@ let baseUrl: string
 let spine: MockSpine
 let score: MockScorePort
 
-beforeAll(() => {
+beforeAll(async () => {
   spine = buildMockSpine()
   score = new MockScorePort()
   __setSpineForTest(spine)
   __setScoreForTest(score)
+  authToken = await mintHs256Jwt(
+    { sub: "00000000-0000-4000-8000-0000000000bb", exp: 4102444800 },
+    JWT_SECRET,
+  )
   app.listen({ port: 0, hostname: "127.0.0.1", banner: false })
   const port = app.server?.port
   if (!port) throw new Error("goal-validation boot: app.server.port unavailable")
@@ -157,7 +188,7 @@ beforeEach(() => {
 async function resolve(body: unknown): Promise<{ status: number; results: Entry[] }> {
   const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
   const json = (await res.json()) as { results?: Entry[] }

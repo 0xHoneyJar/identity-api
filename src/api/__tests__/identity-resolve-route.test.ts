@@ -17,9 +17,37 @@ import type {
 } from "@freeside-auth/ports"
 import type { ResolvedIdentity } from "@freeside-auth/protocol/api/federation/score"
 import app from "../index"
+import { JWT_SECRET } from "../../auth"
 import { __resetSpineForTest, __setSpineForTest } from "../spine"
 import { __resetScoreForTest, __setScoreForTest } from "../score"
 import { MockScorePort } from "../../../packages/adapters/src/__tests__/mock-score"
+
+// ─── HS256 JWT minter — the route is .auth()-gated (OQ-3), so every POST must
+// present a valid bearer. Signs against the same JWT_SECRET the plugin verifies
+// with (read once at auth module load). Mirrors routes.test.ts:113.
+async function mintHs256Jwt(payload: Record<string, unknown>, secret: string): Promise<string> {
+  const enc = new TextEncoder()
+  const b64url = (s: string) => btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")
+  const data = `${b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${b64url(JSON.stringify(payload))}`
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  )
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(data))
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+  return `${data}.${sig}`
+}
+
+let authToken = ""
+function authHeaders(): Record<string, string> {
+  return { "content-type": "application/json", authorization: `Bearer ${authToken}` }
+}
 
 // ─── mock spine (per-wallet maps; mirrors profile-route.test stub shape) ─────
 
@@ -141,11 +169,15 @@ let baseUrl: string
 let mockSpine: MockSpine
 let mockScore: MockScorePort
 
-beforeAll(() => {
+beforeAll(async () => {
   mockSpine = buildMockSpine()
   mockScore = new MockScorePort()
   __setSpineForTest(mockSpine)
   __setScoreForTest(mockScore)
+  authToken = await mintHs256Jwt(
+    { sub: "00000000-0000-4000-8000-0000000000aa", exp: 4102444800 },
+    JWT_SECRET,
+  )
   app.listen({ port: 0, hostname: "127.0.0.1", banner: false })
   const port = app.server?.port
   if (!port) throw new Error("test boot: app.server.port unavailable after listen({port:0})")
@@ -166,7 +198,7 @@ beforeEach(() => {
 async function resolve(body: unknown): Promise<{ status: number; results: Entry[] }> {
   const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
   const json = (await res.json()) as { results?: Entry[] }
@@ -269,7 +301,7 @@ describe("POST /v1/identity/resolve — batch bound (case 6)", () => {
     const wallets = Array.from({ length: 101 }, (_, i) => hexWallet(i + 1))
     const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ wallets }),
     })
     expect(res.status).toBe(400)
@@ -278,7 +310,7 @@ describe("POST /v1/identity/resolve — batch bound (case 6)", () => {
   it("0 wallets → 400", async () => {
     const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ wallets: [] }),
     })
     expect(res.status).toBe(400)
@@ -287,7 +319,7 @@ describe("POST /v1/identity/resolve — batch bound (case 6)", () => {
   it("bad hex → 400", async () => {
     const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ wallets: ["not-an-address"] }),
     })
     expect(res.status).toBe(400)
@@ -324,9 +356,31 @@ describe("POST /v1/identity/resolve — spine I/O failure", () => {
     mockSpine.__throwOnResolve(true)
     const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ wallets: [WALLET_A] }),
     })
     expect(res.status).toBeGreaterThanOrEqual(500)
+  })
+})
+
+// ─── §OQ-3: auth gate (the route is .auth()-protected before production) ─────
+
+describe("POST /v1/identity/resolve — auth gate (OQ-3)", () => {
+  it("401 when no bearer token is presented", async () => {
+    const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" }, // intentionally no authorization
+      body: JSON.stringify({ wallets: [WALLET_A] }),
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it("401 when the bearer token is malformed", async () => {
+    const res = await fetch(`${baseUrl}/v1/identity/resolve`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer not.a.jwt" },
+      body: JSON.stringify({ wallets: [WALLET_A] }),
+    })
+    expect(res.status).toBe(401)
   })
 })

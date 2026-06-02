@@ -29,7 +29,8 @@ No CRITICAL or HIGH security issues introduced by this sprint. The feature is ad
 
 ## Findings (non-blocking)
 
-### MEDIUM-1 — open-posture batch exposure of wallet→identity (pre-cutover decision)
+### MEDIUM-1 — open-posture batch exposure of wallet→identity — **RESOLVED 2026-06-02**
+**Resolution:** operator chose to **gate the route with `.auth()`** before any production deploy (OQ-3 decided). The facade now requires a valid bearer JWT (the building's `authJwtPlugin`, mirrors `/v1/me`); the verify implementation is untouched (AC-13 re-verified empty). Tests: 200 with token, **401** without/with-malformed token. Dashboard consumers must present a session/svc JWT — coordinate via identity-api#4. Original finding (for the record):
 On an unauthenticated endpoint, a caller can POST ≤100 wallets and harvest `wallet → {user_id, discord_id, nyms}` in one shot. The data is ALREADY open via per-wallet `/v1/profile` + the two-step resolve, so this introduces **no new data class** — but it amplifies harvesting convenience (batch).
 - **Why non-blocking now:** ships BEHIND the contract-first bridge (`IDENTITY_RESOLVE_URL` mock-fallback); production cutover is GATED on #11 + backfill; prod coverage is tiny (5 users / 3 nyms); OQ-3 is an explicit, documented deferral to T-A2.
 - **Condition before cutover:** resolve OQ-3 — decide whether the route needs `.auth()` (svc-JWT) AND/OR rate-limiting before it serves production traffic. If protected: add `.auth()` to the route ONLY (never the verify impl, AC-13).

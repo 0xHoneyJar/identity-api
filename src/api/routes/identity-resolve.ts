@@ -30,7 +30,13 @@ import {
 /** Per-source AbortSignal budget for the single batched score-api call. */
 const DEFAULT_SCORE_TIMEOUT_MS = 600
 
-export const resolveIdentityBatch = route
+// OQ-3 (operator decision 2026-06-02): gate the facade behind `.auth()` so a
+// caller MUST present a valid JWT (the building's authJwtPlugin) before the open
+// wallet→identity batch surface is served in production. This only adds the
+// prototype-installed `.auth()` modifier (mirrors /v1/me, src/api/routes/me.ts);
+// the verify IMPLEMENTATION is untouched (AC-13). Dashboard consumers must present
+// a session/svc JWT — coordinate via identity-api#4 before cutover.
+const resolveIdentityBuilder = route
   .post("/v1/identity/resolve")
   .meta({
     summary:
@@ -40,8 +46,16 @@ export const resolveIdentityBatch = route
       description:
         "Hand a batch of wallets (≤100), get one pre-merged identity each: display_name (priority world_nym>discord>score>address, applied once server-side), discord {id,linked}, onchain-name passthrough, is_primary_wallet, per-batch degraded flag. Read-only. Per G-5 / bd-2wo.38.",
     },
-  })
-  .handle(async (c) => {
+  }) as unknown as { auth: () => typeof resolveRouteShim }
+
+// Hyper's `.auth()` sugar (installed on RouteBuilder.prototype by src/auth.ts)
+// returns a builder whose relevant member is `.handle()`. This shim captures
+// that contract without depending on Hyper internals (same workaround as me.ts).
+declare const resolveRouteShim: {
+  handle: (h: (c: { body: unknown }) => unknown) => unknown
+}
+
+export const resolveIdentityBatch = resolveIdentityBuilder.auth().handle(async (c) => {
     // Validate the body in-handler (mirrors /v1/profile's in-handler validate,
     // profile.ts:77-86) rather than via Hyper's `.body(Schema)` builder: the
     // vendored openapi-zod converter crashes walking a `z.array(...)` body
