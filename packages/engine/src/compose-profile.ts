@@ -51,6 +51,7 @@ import type {
   FederationResult,
   InventoryPort,
   ScorePort,
+  SpineIdentityShape,
   SpinePort,
 } from "@freeside-auth/ports"
 import type {
@@ -64,6 +65,7 @@ import type {
 import type { AuditActor } from "./resolve-spine"
 import type { CircuitBreaker } from "./circuit-breaker"
 import { withTimeout } from "./with-timeout"
+import { resolveDisplayName } from "./resolve-display-name"
 
 // ─── public types ──────────────────────────────────────────────────────────
 
@@ -114,6 +116,14 @@ export interface ComposeProfileOpts {
   readonly perScoreTimeoutMs?: number
   readonly perCodexTimeoutMs?: number
   readonly actor?: AuditActor
+  /**
+   * A5 (#11 Phase 1): the world to scope the privacy-default display-name to.
+   * When set, composeProfile attaches an OPTIONAL `display` block computed via
+   * resolveDisplayName over the user's world_names (scoped to this world). The
+   * profile route passes the `world` query param. Omitted → no display block
+   * (additive, non-breaking).
+   */
+  readonly worldSlug?: string
 }
 
 /** Input: either {userId} or {walletAddress} (discriminated). */
@@ -197,7 +207,23 @@ export async function composeProfile(
   opts: ComposeProfileOpts = {},
 ): Promise<ProfileResp> {
   // ─── 1. Resolve identity from spine (no timeout — SoR) ────────────────
-  const { identity, walletAddress } = await resolveSpineIdentity(deps.spine, input)
+  const { identity, spine: spineIdentity, walletAddress } = await resolveSpineIdentity(
+    deps.spine,
+    input,
+  )
+
+  // A5 (#11 Phase 1): the privacy-default display block. Computed via the SAME
+  // resolveDisplayName the /v1/identity/resolve merge uses (so both endpoints
+  // agree). Scoped to opts.worldSlug; privacy floor (includeOptIn:false) so the
+  // raw address never surfaces as the default. Attached only when a world is
+  // scoped AND the user has an eligible registry name — additive + non-breaking.
+  const resolvedDisplay =
+    opts.worldSlug !== undefined
+      ? resolveDisplayName(spineIdentity.world_names, {
+          worldSlug: opts.worldSlug,
+          includeOptIn: false,
+        })
+      : null
 
   const actor: AuditActor = opts.actor ?? "system"
   const invMs = opts.perInventoryTimeoutMs ?? DEFAULT_INVENTORY_TIMEOUT_MS
@@ -268,6 +294,14 @@ export async function composeProfile(
   // ─── 5. Assemble ProfileResp ────────────────────────────────────────────
   const resp: ProfileResp = {
     identity,
+    ...(resolvedDisplay !== null
+      ? {
+          display: {
+            display_name: resolvedDisplay.value,
+            display_source: resolvedDisplay.display_source,
+          },
+        }
+      : {}),
     ...(holdingsRes.ok ? { holdings: holdingsRes.data } : {}),
     ...(scoreRes && scoreRes.ok ? { score: scoreRes.data } : {}),
     ...(codexRes && codexRes.ok ? { codex: codexRes.data } : {}),
@@ -311,7 +345,7 @@ export async function composeProfile(
 export async function resolveSpineIdentity(
   spine: SpinePort,
   input: ComposeProfileInput,
-): Promise<{ identity: IdentityResp; walletAddress: string }> {
+): Promise<{ identity: IdentityResp; spine: SpineIdentityShape; walletAddress: string }> {
   if ("userId" in input && input.userId) {
     const identity = await spine.getIdentity(input.userId)
     if (!identity) throw new Error("user_not_found")
@@ -322,7 +356,7 @@ export async function resolveSpineIdentity(
       // as "no wallet to fan out with."
       throw new Error("primary_wallet_missing")
     }
-    return { identity: identity as IdentityResp, walletAddress: wallet }
+    return { identity: identity as IdentityResp, spine: identity, walletAddress: wallet }
   }
   // walletAddress branch
   const walletAddress = input.walletAddress!
@@ -330,7 +364,7 @@ export async function resolveSpineIdentity(
   if (!userId) throw new Error("wallet_not_resolved")
   const identity = await spine.getIdentity(userId)
   if (!identity) throw new Error("user_not_found")
-  return { identity: identity as IdentityResp, walletAddress }
+  return { identity: identity as IdentityResp, spine: identity, walletAddress }
 }
 
 /**

@@ -22,6 +22,7 @@
 import type { SpineIdentityShape } from "@freeside-auth/ports"
 import type { ResolvedIdentity } from "@freeside-auth/protocol/api/federation/score"
 import type { IdentityResolveEntry } from "@freeside-auth/protocol/api/identity-resolve"
+import { resolveDisplayName } from "./resolve-display-name"
 
 export interface MergeIdentityInput {
   /** The normalized (lowercased) wallet — echoed in the entry. */
@@ -57,6 +58,21 @@ export function mergeIdentity(input: MergeIdentityInput): IdentityResolveEntry {
       ? spine?.world_identities.find((w) => w.world_slug === worldSlug)?.nym
       : undefined
 
+  // A5 (#11 Phase 1): the privacy-default registry name. The SAME
+  // resolveDisplayName the /v1/profile compose uses — so both endpoints + JWT
+  // display claims project the IDENTICAL spine. Scoped to the requested world;
+  // privacy floor (includeOptIn:false) means the raw shortened address can
+  // NEVER surface here as the default. Returns null for a user with no eligible
+  // registry name (empty world_names, or no name in this world) — then the
+  // legacy `address` fallback applies (backward compat).
+  const registryName =
+    spine !== null
+      ? resolveDisplayName(spine.world_names, {
+          ...(worldSlug !== undefined ? { worldSlug } : {}),
+          includeOptIn: false,
+        })
+      : null
+
   let display_name: string
   let display_source: IdentityResolveEntry["display_source"]
   if (worldNym !== undefined) {
@@ -72,7 +88,18 @@ export function mergeIdentity(input: MergeIdentityInput): IdentityResolveEntry {
     // score resolved a REAL onchain name → consume its display_name as ONE tier.
     display_name = enrich.display_name
     display_source = "score"
+  } else if (registryName !== null) {
+    // The privacy-default registry name (generated handle or claimed nym). This
+    // REPLACES the unconditional raw-address fallback: a user with a registry
+    // name NEVER shows the raw address. resolveDisplayName already guaranteed
+    // the value is non-opt-in (the privacy floor).
+    display_name = registryName.value
+    display_source = registryName.display_source
   } else {
+    // Legacy fallback — ONLY for users with no registry name in this world
+    // (pre-backfill, or a non-registry world). Once the backfill runs, every
+    // mibera user has at least a generated handle, so this path is the
+    // genuinely-nameless tail.
     display_name = wallet
     display_source = "address"
   }

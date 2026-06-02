@@ -25,6 +25,7 @@
 
 import { z } from "zod"
 import { IdentityRespSchema, UserIdParamSchema, WalletAddressParamSchema } from "./resolve"
+import { DisplaySourceSchema } from "./identity-resolve"
 import {
   CodexGetMiberaBatchRespSchema,
   CodexMiberaEntrySchema,
@@ -71,6 +72,20 @@ export type ProfileQuery = z.infer<typeof ProfileQuerySchema>
  */
 export const ProfileRespSchema = z.object({
   identity: IdentityRespSchema,
+  /**
+   * A5 (#11 Phase 1): the privacy-default display block, computed via the SAME
+   * resolveDisplayName the /v1/identity/resolve merge uses (the two endpoints
+   * AGREE). OPTIONAL + additive — present only when the request scopes a
+   * `world` AND the user has an eligible registry name. The generated
+   * MIBERA-XXXX handle is the floor; `display_source` NEVER reports the raw
+   * address as the default (privacy by default).
+   */
+  display: z
+    .object({
+      display_name: z.string(),
+      display_source: DisplaySourceSchema,
+    })
+    .optional(),
   holdings: InventoryGetHoldingsRespSchema.optional(),
   score: ScoreGetWalletRespSchema.optional(),
   codex: CodexGetMiberaBatchRespSchema.optional(),

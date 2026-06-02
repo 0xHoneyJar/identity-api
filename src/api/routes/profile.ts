@@ -114,7 +114,9 @@ export const getProfile = route
           breakers,
         },
         input,
-        { actor: "system" },
+        // A5 (#11 Phase 1): scope the privacy-default display block to the
+        // request's `world` so /v1/profile and /v1/identity/resolve agree.
+        { actor: "system", worldSlug: q.world },
       )
       return jsonResponse(200, profile)
     } catch (err) {

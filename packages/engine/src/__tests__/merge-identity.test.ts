@@ -237,3 +237,103 @@ describe("mergeIdentity — score tier requires a REAL onchain name (§7.2 case 
     expect(e.display_name).toBe("hb.eth")
   })
 })
+
+// ─── A5 (#11 Phase 1): the privacy-default resolver wired in ──────────────────
+//
+// The registry name (resolveDisplayName over spine.world_names) becomes the
+// privacy-aware successor to the raw-address fallback: a wallet-only user with
+// a generated handle shows the handle, NEVER the raw address. The raw address
+// remains the fallback ONLY for users with NO registry names (empty world_names
+// — e.g. pre-backfill or non-mibera worlds), preserving backward compat.
+
+function worldName(over: Partial<import("@freeside-auth/ports").SpineWorldName>) {
+  return {
+    world_slug: "mibera",
+    name_type: "generated" as string,
+    value: "MIBERA-ABCDEF",
+    priority: 50,
+    is_opt_in: false,
+    assigned_at: "2026-06-01T00:00:00.000Z",
+    retired_at: null as string | null,
+    ...over,
+  }
+}
+
+describe("mergeIdentity — A5 privacy-default registry tier", () => {
+  it("a wallet-only user with a generated handle shows the handle, NEVER the raw address", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({ world_names: [worldName({})] }),
+      enrich: undefined, // no score name
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    expect(e.display_source).toBe("generated")
+    expect(e.display_name).toBe("MIBERA-ABCDEF")
+    expect(e.display_name).not.toBe(WALLET) // the privacy floor holds
+  })
+
+  it("a claimed_nym in the registry beats the generated handle", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        world_names: [
+          worldName({ name_type: "generated", value: "MIBERA-AAAAAA", priority: 50 }),
+          worldName({ name_type: "claimed_nym", value: "satoshi", priority: 10 }),
+        ],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    expect(e.display_source).toBe("claimed_nym")
+    expect(e.display_name).toBe("satoshi")
+  })
+
+  it("an opt-in raw_short_addr name NEVER becomes the default (privacy invariant at the endpoint)", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        world_names: [
+          worldName({ name_type: "raw_short_addr", value: "0xabc…01", priority: 1, is_opt_in: true }),
+          worldName({ name_type: "generated", value: "MIBERA-BBBBBB", priority: 50 }),
+        ],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    // Even though raw_short_addr has priority 1, the privacy gate excludes it;
+    // the generated handle wins.
+    expect(e.display_source).toBe("generated")
+    expect(e.display_name).toBe("MIBERA-BBBBBB")
+  })
+
+  it("a registry name is scoped to its world (other-world name does not surface)", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        world_names: [worldName({ world_slug: "other-world", name_type: "generated", value: "MIBERA-CCCCCC" })],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: true,
+    })
+    // No mibera-world registry name → falls through to the raw-address fallback
+    // (legacy behavior for a user with no name in THIS world).
+    expect(e.display_source).toBe("address")
+    expect(e.display_name).toBe(WALLET)
+  })
+
+  it("empty world_names → unchanged legacy behavior (raw-address fallback)", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({ world_names: [] }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: true,
+    })
+    expect(e.display_source).toBe("address")
+    expect(e.display_name).toBe(WALLET)
+  })
+})
