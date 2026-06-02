@@ -6,8 +6,23 @@ cycle_id:     cutover-identity-resolve-facade-2026-06-02
 authored_by:  KRANZ (construct-freeside) via opus-4-8-1m + zksoju
 target:       identity.0xhoneyjar.xyz (Railway, dashboard-managed)
 trigger:      operator "deploy 33"
-STATUS:       RECONCILED — #28 UNBLOCKED (MERGEABLE). Prod flip PENDING operator (creds + GO). See UPDATE.
+STATUS:       LIVE — cutover complete 2026-06-01. Facade serving prod; OQ-3 gate firing. See LANDED.
 ```
+
+## LANDED 2026-06-01 — cutover complete (Acts 3.L3 + 4 GREEN)
+
+Operator GO ("you apply"). Executed with KRANZ discipline:
+1. **Migrate prod (read-only status first):** prod was at 0002; applied 0003–0007 (all verified additive — no DROP/TRUNCATE/destructive ALTER; the one `DELETE` is a conditional pg_cron 90d retention job on a table the same migration creates). `migrate status` after: applied(7), pending(0). Via the public proxy (`railway run` injects the internal URL, unreachable locally).
+2. **Merge `#28` → main:** squash `895a6d9`.
+3. **Deploy:** the service is NOT GitHub-connected (`source: none`) — no auto-deploy on merge. Deployed via `railway up` (the established method; deployment `378d13ca` SUCCESS).
+4. **Smoke (GREEN):** `POST /v1/identity/resolve` no-token → **401** (facade live + OQ-3 `.auth()` gate firing; was 404 on old code) · `GET /v1/me` → 401 · `POST /v1/auth/service-jwt` → **400 not 404** (ES256 svc-jwt route un-lagged).
+
+**Correction (KRANZ — a claim falsified by the substrate):** I'd listed "JWKS `/.well-known/jwks.json` stops 404-ing" as a smoke check. WRONG — JWKS is not a registered route in `src/api/index.ts` (only a docblock in `src/jwt-mint.ts`), so it still 404s. svc-JWT *issuance* is live; the *verification* JWKS endpoint isn't wired. Pre-existing gap, logged (bead) — NOT a facade concern, NOT a deploy failure.
+
+**Remaining (operator):** the 30-min stability watch on the Railway dashboard (I can't see it; endpoints are responding correctly). Dashboard CUTOVER (consumer flipping `IDENTITY_RESOLVE_*` live) is still separately gated on #11 backfill — the facade ships `reachable:"unknown"` until then.
+
+---
+
 
 ## UPDATE 2026-06-02 — Reconciled (Layer 2 → GREEN)
 
