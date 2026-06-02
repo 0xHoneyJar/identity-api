@@ -10,11 +10,13 @@
  *   - world_identity_names — per-user typed name rows (multiple per user/world)
  *
  * The old single-column `UNIQUE (world_slug, nym)` on world_identity is
- * REPLACED by a partial unique index on
- * `(world_slug, name_type, value) WHERE retired_at IS NULL` — incompatible
- * with the multi-name model. `world_identity.nym` is KEPT as a denormalized
- * default-display pointer; a BEFORE trigger recomputes it from the lowest-
- * priority active non-opt-in name row (mirrors 0002_primary_wallet_trigger).
+ * KEPT (it backs the live `GET /v1/resolve/nym` LIMIT-1 lookup, which depends
+ * on world-nym uniqueness — dropping it would let two users share a denorm
+ * nym and return an arbitrary owner). The registry ADDS a separate partial
+ * unique index on `(world_slug, name_type, value) WHERE retired_at IS NULL`
+ * — additive, per-type, NOT a replacement. `world_identity.nym` is KEPT as a
+ * denormalized default-display pointer; a recompute trigger keeps it at the
+ * lowest-priority active non-opt-in name row (mirrors 0002_primary_wallet_trigger).
  *
  * Strategy mirrors primary_wallet_trigger.test.ts / migrate.test.ts:
  *   - GATED on TEST_DATABASE_URL (skips without it — CI has no PG).
