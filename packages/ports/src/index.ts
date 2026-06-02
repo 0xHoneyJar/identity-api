@@ -37,6 +37,8 @@ export {
   type SpineWallet,
   type SpineLinkedAccount,
   type SpineWorldIdentity,
+  // A2 (#11 Phase 1) — typed world-name registry read shape
+  type SpineWorldName,
   // C-2 (bead arrakis-491i) — CM→world authorization relation read shape
   type SpineManagedWorld,
   type SpineIdentityShape,

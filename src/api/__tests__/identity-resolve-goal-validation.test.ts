@@ -71,6 +71,7 @@ function identity(userId: string, wallet: string, over: Partial<SpineIdentitySha
     wallets: [{ wallet_address: wallet, chain_ids: ["1"], is_primary: true, verified_at: "x", unlinked_at: null }],
     linked_accounts: [],
     world_identities: [],
+    world_names: [],
     ...over,
   }
 }
@@ -129,6 +130,11 @@ function buildMockSpine(): MockSpine {
     async linkWallet() {},
     async linkAccount() {},
     async claimNym() {},
+    // A2 (#11 Phase 1): SpinePort gained the world-name primitives; stubs.
+    async claimGeneratedName() {
+      return "MIBERA-000001";
+    },
+    async importName() {},
     async setPrimary() {
       return true
     },

@@ -59,6 +59,31 @@ export interface SpineWorldIdentity {
 }
 
 /**
+ * Single world_identity_names row as the spine sees it (A2 · #11 Phase 1).
+ *
+ * The spine is the SOLE generator/owner of world display-names. Each row is one
+ * typed name a user holds in a world: a generated MIBERA-XXXX handle, an
+ * authored claimed nym, or a derived raw-short-address (opt-in). `priority`
+ * (lower = preferred) + `is_opt_in` are denormalized from the world's
+ * `world_name_types` registry at assignment time so the resolver reads one
+ * table on the hot path. `retired_at` is the soft-retire marker (NULL =
+ * active), mirroring `wallet_links.unlinked_at`.
+ *
+ * The privacy floor: a name with `is_opt_in = true` (raw_short_addr) is NEVER
+ * the default display — `resolveDisplayName(..., { includeOptIn: false })`
+ * excludes it structurally. See `resolveDisplayName` (A4).
+ */
+export interface SpineWorldName {
+  readonly world_slug: string
+  readonly name_type: string
+  readonly value: string
+  readonly priority: number
+  readonly is_opt_in: boolean
+  readonly assigned_at: string
+  readonly retired_at: string | null
+}
+
+/**
  * Single world_managers row as the spine sees it (C-2).
  *
  * One edge in the CM→world authorization relation: the user (the row's
@@ -86,6 +111,13 @@ export interface SpineIdentityShape {
   readonly wallets: readonly SpineWallet[]
   readonly linked_accounts: readonly SpineLinkedAccount[]
   readonly world_identities: readonly SpineWorldIdentity[]
+  /**
+   * A2 (#11 Phase 1): the user's typed name rows across all worlds, ACTIVE
+   * rows only, priority-ordered (lower first). Additive — existing consumers
+   * that don't read it are unaffected. `resolveDisplayName` (A4) consumes this
+   * to project the privacy-default display-name.
+   */
+  readonly world_names: readonly SpineWorldName[]
 }
 
 /** Audit event input — JSONB payload is caller-structured. */
@@ -257,6 +289,42 @@ export interface SpinePort {
     userId: string
     worldSlug: string
     nym: string
+  }): Promise<void>
+
+  /**
+   * A2 (#11 Phase 1) — the HOISTED generator. Mint a new world display-name
+   * for `userId` in `worldSlug` using the world's `generated_scheme` name type:
+   * read its `pattern`, generate a CONFORMING value, collision-check against
+   * the partial unique `(world_slug, name_type, value) WHERE retired_at IS
+   * NULL` (retry on the cryptographically-rare collision), INSERT the
+   * `world_identity_names` row at the type's default priority/opt-in, and emit
+   * a `name_assigned` audit. Returns the minted value.
+   *
+   * For NEW users only — the backfill ABSORBS honey-road's existing values via
+   * `importName` instead (do NOT regenerate what an app already shows).
+   *
+   * Throws if the world has no `generated_scheme` name type (a
+   * misconfiguration — the world's registry must declare one before users can
+   * be minted a generated handle).
+   */
+  claimGeneratedName(opts: { userId: string; worldSlug: string }): Promise<string>
+
+  /**
+   * A2 (#11 Phase 1) — ABSORB an externally-minted name value. Inserts a
+   * `world_identity_names` row for `userId`/`worldSlug`/`nameType` with the
+   * given `value` VERBATIM (never regenerated), at the type's default
+   * priority/opt-in, and emits a `name_assigned` audit. The backfill uses this
+   * to absorb honey-road's existing `mibera_id` (as `generated`) +
+   * `display_name` (as `claimed_nym`) so nothing on-screen changes.
+   *
+   * Throws `SpineConflictError(kind='world_identity')` if the value is already
+   * actively held in the world for that type (the partial unique).
+   */
+  importName(opts: {
+    userId: string
+    worldSlug: string
+    nameType: string
+    value: string
   }): Promise<void>
 
   // primary swap (FR-R5)

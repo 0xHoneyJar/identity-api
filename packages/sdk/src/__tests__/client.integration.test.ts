@@ -96,6 +96,11 @@ function buildMockSpine(): MockSpine {
     async linkWallet() {},
     async linkAccount() {},
     async claimNym() {},
+    // A2 (#11 Phase 1): SpinePort gained the world-name primitives; stubs.
+    async claimGeneratedName() {
+      return "MIBERA-000001";
+    },
+    async importName() {},
     async setPrimary() {
       return true
     },
@@ -175,6 +180,7 @@ const FIXTURE_IDENTITY: SpineIdentityShape = {
       joined_at: "2026-05-24T00:00:00.000Z",
     },
   ],
+  world_names: [],
 }
 
 // ─── boot/teardown ─────────────────────────────────────────────────────────

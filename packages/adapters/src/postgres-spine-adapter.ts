@@ -378,6 +378,26 @@ export class PostgresSpineAdapter implements SpinePort {
        ORDER BY joined_at ASC
     `) as Array<{ world_slug: string; nym: string; joined_at: string }>
 
+    // A2 (#11 Phase 1): the user's ACTIVE typed name rows, priority-ordered
+    // (lower first). resolveDisplayName (A4) consumes this to project the
+    // privacy-default display-name. Retired rows are excluded — they are not
+    // part of the live name surface.
+    const nameRows = (await sql`
+      SELECT world_slug, name_type, value, priority, is_opt_in, assigned_at, retired_at
+        FROM world_identity_names
+       WHERE user_id = ${userId}
+         AND retired_at IS NULL
+       ORDER BY world_slug ASC, priority ASC, assigned_at ASC, value ASC
+    `) as Array<{
+      world_slug: string
+      name_type: string
+      value: string
+      priority: number
+      is_opt_in: boolean
+      assigned_at: string | Date
+      retired_at: string | Date | null
+    }>
+
     return {
       user_id: user.user_id,
       primary_wallet: user.primary_wallet,
@@ -400,6 +420,15 @@ export class PostgresSpineAdapter implements SpinePort {
         world_slug: wi.world_slug,
         nym: wi.nym,
         joined_at: wi.joined_at,
+      })),
+      world_names: nameRows.map((n) => ({
+        world_slug: n.world_slug,
+        name_type: n.name_type,
+        value: n.value,
+        priority: n.priority,
+        is_opt_in: n.is_opt_in,
+        assigned_at: toIsoString(n.assigned_at),
+        retired_at: n.retired_at === null ? null : toIsoString(n.retired_at),
       })),
     }
   }
@@ -585,6 +614,148 @@ export class PostgresSpineAdapter implements SpinePort {
       }
       throw err
     }
+  }
+
+  // ── world name registry (A2 · #11 Phase 1) ────────────────────────────────
+
+  /**
+   * A2: the HOISTED generator. Mint a new generated-scheme name for a user in
+   * a world.
+   *
+   * 1. Read the world's `generated_scheme` name type (its `pattern` +
+   *    `default_priority` + `is_opt_in`). Throw if absent (misconfig).
+   * 2. Generate a value CONFORMING to `pattern`, collision-checking against
+   *    the partial unique `uq_world_identity_names_active_value`. The 24-bit
+   *    space for `^MIBERA-[A-F0-9]{6}$` is small relative to a large
+   *    population, so we retry on collision (bounded attempts) rather than
+   *    assume cryptographic non-collision like the 256-bit nonce path.
+   * 3. INSERT the row + emit a `name_assigned` audit (origin='generated').
+   *
+   * Returns the minted value so callers (linkWalletOnly, A3) can surface it.
+   */
+  async claimGeneratedName(opts: { userId: string; worldSlug: string }): Promise<string> {
+    const sql = this.sql
+    const typeRows = (await sql`
+      SELECT name_type, pattern, default_priority, is_opt_in
+        FROM world_name_types
+       WHERE world_slug = ${opts.worldSlug}
+         AND generator_kind = 'generated_scheme'
+       ORDER BY default_priority ASC
+       LIMIT 1
+    `) as Array<{
+      name_type: string
+      pattern: string | null
+      default_priority: number
+      is_opt_in: boolean
+    }>
+    const type = typeRows[0]
+    if (!type) {
+      throw new Error(
+        `claimGeneratedName: world '${opts.worldSlug}' has no generated_scheme name type configured`,
+      )
+    }
+    if (!type.pattern) {
+      throw new Error(
+        `claimGeneratedName: world '${opts.worldSlug}' generated_scheme type '${type.name_type}' has no pattern`,
+      )
+    }
+
+    const MAX_ATTEMPTS = 16
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const value = generateFromPattern(type.pattern)
+      try {
+        await sql`
+          INSERT INTO world_identity_names
+            (user_id, world_slug, name_type, value, priority, is_opt_in)
+          VALUES
+            (${opts.userId}, ${opts.worldSlug}, ${type.name_type}, ${value},
+             ${type.default_priority}, ${type.is_opt_in})
+        `
+        await this.writeAuditEvent({
+          event_type: "name_assigned",
+          user_id: opts.userId,
+          actor: "system",
+          payload: {
+            world_slug: opts.worldSlug,
+            name_type: type.name_type,
+            value,
+            origin: "generated",
+          },
+        })
+        return value
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          // Collision against an active value — retry with a fresh draw.
+          continue
+        }
+        throw err
+      }
+    }
+    throw new Error(
+      `claimGeneratedName: exhausted ${MAX_ATTEMPTS} attempts generating a unique value for world '${opts.worldSlug}' (pattern ${type.pattern}) — the generated-name space may be saturated`,
+    )
+  }
+
+  /**
+   * A2: ABSORB an externally-minted name value (the backfill path). Inserts
+   * the value VERBATIM at the type's default priority/opt-in + a
+   * `name_assigned` audit (origin='imported'). Throws
+   * `SpineConflictError(kind='world_identity')` if the active value already
+   * exists for that (world, type).
+   */
+  async importName(opts: {
+    userId: string
+    worldSlug: string
+    nameType: string
+    value: string
+  }): Promise<void> {
+    const sql = this.sql
+    const typeRows = (await sql`
+      SELECT default_priority, is_opt_in
+        FROM world_name_types
+       WHERE world_slug = ${opts.worldSlug}
+         AND name_type = ${opts.nameType}
+    `) as Array<{ default_priority: number; is_opt_in: boolean }>
+    const type = typeRows[0]
+    if (!type) {
+      throw new Error(
+        `importName: world '${opts.worldSlug}' has no name type '${opts.nameType}' configured`,
+      )
+    }
+    try {
+      await sql`
+        INSERT INTO world_identity_names
+          (user_id, world_slug, name_type, value, priority, is_opt_in)
+        VALUES
+          (${opts.userId}, ${opts.worldSlug}, ${opts.nameType}, ${opts.value},
+           ${type.default_priority}, ${type.is_opt_in})
+      `
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new SpineConflictError(
+          `(${opts.worldSlug}, ${opts.nameType}, ${opts.value}) is already actively held`,
+          "world_identity",
+          {
+            world_slug: opts.worldSlug,
+            name_type: opts.nameType,
+            value: opts.value,
+            attempted_user_id: opts.userId,
+          },
+        )
+      }
+      throw err
+    }
+    await this.writeAuditEvent({
+      event_type: "name_assigned",
+      user_id: opts.userId,
+      actor: "system",
+      payload: {
+        world_slug: opts.worldSlug,
+        name_type: opts.nameType,
+        value: opts.value,
+        origin: "imported",
+      },
+    })
   }
 
   /**
@@ -849,6 +1020,37 @@ export class PostgresSpineAdapter implements SpinePort {
  *   {code: 'ERR_POSTGRES_SERVER_ERROR', errno: '23505',
  *    constraint: 'uq_wallet_links_active_address', ...}
  */
+/**
+ * Generate a value conforming to a constrained `generated_scheme` pattern
+ * (A2 · claimGeneratedName). v1 supports the shape `^<literal-prefix>[<CLASS>]{N}$`
+ * where CLASS is `A-F0-9` (uppercase hex). This is exactly the mibera scheme
+ * `^MIBERA-[A-F0-9]{6}$`; widening to other classes is a deliberate future
+ * extension, NOT an open-ended regex engine (we generate, never parse
+ * arbitrary regex — that would be an injection surface).
+ *
+ * Throws if the pattern is not the supported shape, so a misconfigured world
+ * fails loudly at mint time rather than silently producing a non-conforming
+ * value that the partial unique would still accept.
+ */
+function generateFromPattern(pattern: string): string {
+  // Match: ^<prefix>[A-F0-9]{N}$   (prefix = literal chars, no regex metas)
+  const m = /^\^([A-Za-z0-9_-]*)\[A-F0-9\]\{(\d+)\}\$$/.exec(pattern)
+  if (!m) {
+    throw new Error(
+      `generateFromPattern: unsupported pattern '${pattern}' — v1 supports only '^<prefix>[A-F0-9]{N}$' (e.g. '^MIBERA-[A-F0-9]{6}$')`,
+    )
+  }
+  const prefix = m[1] ?? ""
+  const n = Number(m[2])
+  // Generate n uppercase-hex chars from CSPRNG bytes. ceil(n/2) bytes → 2 hex
+  // chars each → slice to exactly n.
+  const hex = randomBytes(Math.ceil(n / 2))
+    .toString("hex")
+    .toUpperCase()
+    .slice(0, n)
+  return `${prefix}${hex}`
+}
+
 function isUniqueViolation(err: unknown): boolean {
   if (err === null || typeof err !== "object") return false
   const e = err as { code?: unknown; errno?: unknown; message?: unknown }

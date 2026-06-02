@@ -31,6 +31,7 @@ function spine(over: Partial<SpineIdentityShape> = {}): SpineIdentityShape {
     ],
     linked_accounts: [],
     world_identities: [],
+    world_names: [],
     ...over,
   }
 }
