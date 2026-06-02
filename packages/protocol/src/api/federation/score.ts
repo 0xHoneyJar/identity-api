@@ -163,3 +163,72 @@ export const ScoreGetWalletRespSchema = z
   })
   .loose()
 export type ScoreGetWalletResp = z.infer<typeof ScoreGetWalletRespSchema>
+
+// ─── identity-resolve surface (bd-2wo.38.1) ─────────────────────────────────
+
+/**
+ * Request shape for score-api `POST /v1/identity/resolve` — the group-aware
+ * onchain-name surface (distinct from the scores-only `GET /v1/wallets/:address`).
+ *
+ * Grounded against the score-api checkout 2026-06-01 (OQ-2 resolved):
+ *   - `~/Documents/GitHub/score-api/src/routes/identity.ts:25-37`
+ *     `const resolveSchema = z.object({ wallets: z.array(z.string()
+ *       .regex(/^0x[a-fA-F0-9]{40}$/)).min(1).max(100) })`
+ *   - Wallet-only: there is **no** `world_slug` param (resolution is purely
+ *     wallet/group-based via the `resolve_wallet_group` RPC).
+ *   - Auth-gated `X-API-Key` (score-api `src/index.ts:90 v1.use("*", authMiddleware)`).
+ */
+export const ScoreResolveIdentityReqSchema = z.object({
+  wallets: z
+    .array(z.string().regex(/^0x[a-fA-F0-9]{40}$/, "0x-prefixed 20-byte hex"))
+    .min(1)
+    .max(100),
+})
+export type ScoreResolveIdentityReq = z.infer<typeof ScoreResolveIdentityReqSchema>
+
+/**
+ * One resolved per-wallet identity record returned by score-api.
+ *
+ * Mirrors `ResolvedIdentity` at score-api `src/types/dynamic.types.ts:94-118`.
+ * `display_name` is **never null** — score-api `computeDisplayName`
+ * (`src/services/identity.service.ts:68-78`) self-truncates to the wallet when
+ * no onchain name exists; the identity-api facade therefore gates its `score`
+ * display tier on a REAL onchain name (beraname/ens_name/twitter_handle
+ * non-null), not on `display_name` presence.
+ *
+ * `.loose()` mirrors `ScoreGetWalletRespSchema`: required fields detect a
+ * backwards-incompatible score-api change (→ parse_error → degraded), unknown
+ * additions pass through. `twitter_source` is modeled as a nullable string
+ * (not a strict enum) so a new source value on the score-api side does not
+ * reject — the facade does not consume it.
+ */
+export const ResolvedIdentitySchema = z
+  .object({
+    wallet: z.string(),
+    ens_name: z.string().nullable(),
+    beraname: z.string().nullable(),
+    basename: z.string().nullable(),
+    twitter_handle: z.string().nullable(),
+    display_name: z.string(),
+    pfp_url: z.string().nullable(),
+    twitter_source: z.string().nullable(),
+  })
+  .loose()
+export type ResolvedIdentity = z.infer<typeof ResolvedIdentitySchema>
+
+/**
+ * Response body for score-api `POST /v1/identity/resolve`.
+ *
+ * A **KEYED MAP** `{ identities: Record<lowercased-wallet, ResolvedIdentity> }`
+ * — NOT an array (score-api `src/types/dynamic.types.ts:130-132`,
+ * `src/routes/identity.ts:34 return c.json({ identities })`). Every requested
+ * wallet is guaranteed present (empty-name fallback,
+ * `src/services/identity.service.ts:253-261`). Consumers MUST look up by the
+ * lowercased wallet address.
+ */
+export const ScoreResolveIdentityRespSchema = z
+  .object({
+    identities: z.record(z.string(), ResolvedIdentitySchema),
+  })
+  .loose()
+export type ScoreResolveIdentityResp = z.infer<typeof ScoreResolveIdentityRespSchema>

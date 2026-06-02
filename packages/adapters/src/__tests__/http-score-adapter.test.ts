@@ -173,3 +173,130 @@ describe("HttpScoreAdapter (T2.1)", () => {
     if (!res.ok) expect(res.reason.kind).toBe("not_found")
   })
 })
+
+// ─── resolveIdentity (bd-2wo.38.1) ──────────────────────────────────────────
+
+const WA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const WB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+function makeResolved(wallet: string, over: Record<string, unknown> = {}) {
+  return {
+    wallet,
+    ens_name: null,
+    beraname: "honeybadger.bera",
+    basename: null,
+    twitter_handle: null,
+    display_name: "honeybadger.bera",
+    pfp_url: null,
+    twitter_source: null,
+    ...over,
+  }
+}
+
+function makeResolveResp(...wallets: string[]) {
+  const identities: Record<string, unknown> = {}
+  for (const w of wallets) identities[w.toLowerCase()] = makeResolved(w.toLowerCase())
+  return { identities }
+}
+
+describe("HttpScoreAdapter.resolveIdentity (bd-2wo.38.1)", () => {
+  it("POSTs /v1/identity/resolve with { wallets } body + X-API-Key (NO world_slug)", async () => {
+    let observedUrl = ""
+    let observed: RequestInit | undefined
+    const stub = async (input: string | URL | Request, init?: RequestInit) => {
+      observedUrl = typeof input === "string" ? input : input.toString()
+      observed = init
+      return new Response(JSON.stringify(makeResolveResp(WA, WB)), { status: 200 })
+    }
+    const adapter = new HttpScoreAdapter({ baseUrl: "https://test.local/", apiKey: "k-1" })
+    await adapter.resolveIdentity({ wallets: [WA, WB] }, { fetchImpl: stub })
+    expect(observedUrl).toBe("https://test.local/v1/identity/resolve")
+    expect(observed?.method).toBe("POST")
+    const headers = observed?.headers as Record<string, string>
+    expect(headers[SCORE_API_KEY_HEADER]).toBe("k-1")
+    expect(headers["content-type"]).toBe("application/json")
+    const body = JSON.parse(observed?.body as string)
+    expect(body).toEqual({ wallets: [WA, WB] })
+    expect(body.world_slug).toBeUndefined()
+  })
+
+  it("happy path: returns the keyed-map { identities }", async () => {
+    const stub = async () => new Response(JSON.stringify(makeResolveResp(WA, WB)), { status: 200 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA, WB] }, { fetchImpl: stub })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.data.identities[WA.toLowerCase()]?.beraname).toBe("honeybadger.bera")
+      expect(res.data.identities[WB.toLowerCase()]?.display_name).toBe("honeybadger.bera")
+    }
+  })
+
+  it("schema is loose() — unknown top-level + per-identity fields pass", async () => {
+    const resp = {
+      identities: { [WA.toLowerCase()]: makeResolved(WA.toLowerCase(), { new_field: "x" }) },
+      cursor: "next-page",
+    }
+    const stub = async () => new Response(JSON.stringify(resp), { status: 200 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(true)
+  })
+
+  it("missing required field (display_name) → parse_error", async () => {
+    const bad = makeResolved(WA.toLowerCase()) as Record<string, unknown>
+    delete bad.display_name
+    const resp = { identities: { [WA.toLowerCase()]: bad } }
+    const stub = async () => new Response(JSON.stringify(resp), { status: 200 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("parse_error")
+  })
+
+  it("401 → unauthorized", async () => {
+    const stub = async () => new Response("Unauthorized", { status: 401 })
+    const adapter = new HttpScoreAdapter()
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("unauthorized")
+  })
+
+  it("404 → not_found", async () => {
+    const stub = async () => new Response("Not Found", { status: 404 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("not_found")
+  })
+
+  it("429 → rate_limited (breaker-exempt; upstream healthy)", async () => {
+    const stub = async () => new Response("Too Many Requests", { status: 429 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("rate_limited")
+  })
+
+  it("503 → upstream_5xx", async () => {
+    const stub = async () => new Response("Service Unavailable", { status: 503 })
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity({ wallets: [WA] }, { fetchImpl: stub })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("upstream_5xx")
+  })
+
+  it("caller AbortSignal fired → timeout", async () => {
+    const ac = new AbortController()
+    ac.abort()
+    const stub = async () => {
+      throw Object.assign(new Error("aborted"), { name: "AbortError" })
+    }
+    const adapter = new HttpScoreAdapter({ apiKey: "k" })
+    const res = await adapter.resolveIdentity(
+      { wallets: [WA] },
+      { fetchImpl: stub, signal: ac.signal },
+    )
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason.kind).toBe("timeout")
+  })
+})
