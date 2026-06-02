@@ -66,6 +66,21 @@ export {
   type LinkVerifiedWalletConflict,
 } from "./link"
 
+export {
+  IdentityResolveReqSchema,
+  DisplaySourceSchema,
+  ReachableSchema,
+  IdentityResolveDiscordSchema,
+  IdentityResolveEntrySchema,
+  IdentityResolveRespSchema,
+  type IdentityResolveReq,
+  type DisplaySource,
+  type Reachable,
+  type IdentityResolveDiscord,
+  type IdentityResolveEntry,
+  type IdentityResolveResp,
+} from "./identity-resolve"
+
 // ─── federation contracts (T2.1) ────────────────────────────────────────────
 //
 // Cross-building wire shapes consumed by identity-api's /v1/profile read-time

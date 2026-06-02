@@ -57,6 +57,20 @@ export type {
   LinkVerifiedWalletResp,
 } from "@freeside-auth/protocol/api"
 
+// ─── identity-resolve merge facade (G-5, bd-2wo.38) ─────────────────────────
+//
+// The dashboard's `IDENTITY_RESOLVE_URL` mock-fallback builds against
+// `IdentityResolveRespSchema` (the sealed per-wallet contract). Cutover (pointing
+// the env at the live route) is GATED on #11 P1 + backfill — NOT this sprint.
+export type {
+  IdentityResolveReq,
+  IdentityResolveEntry,
+  IdentityResolveResp,
+  IdentityResolveDiscord,
+  DisplaySource,
+  Reachable,
+} from "@freeside-auth/protocol/api"
+
 // ─── runtime schemas (also re-exported, for callers who want Zod parse) ─────
 //
 // Use case: `client.identity.get(userId)` returns a typed `IdentityResp`
@@ -90,4 +104,9 @@ export {
   MiberaDimensionsRespSchema,
   LinkVerifiedWalletReqSchema,
   LinkVerifiedWalletRespSchema,
+  // identity-resolve merge facade (G-5) — the sealed shape for the dashboard
+  // mock-fallback (bd-2wo.38.3).
+  IdentityResolveReqSchema,
+  IdentityResolveEntrySchema,
+  IdentityResolveRespSchema,
 } from "@freeside-auth/protocol/api"
