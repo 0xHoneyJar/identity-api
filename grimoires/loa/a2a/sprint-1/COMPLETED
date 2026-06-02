@@ -1,0 +1,16 @@
+SPRINT 1 — POST /v1/identity/resolve merge facade (bd-2wo.38) — COMPLETED
+
+Verdict: APPROVED - LETS FUCKING GO (security audit, 2026-06-02)
+Goal: PRD v3.0 G-5 (read-time compose, no-embed).
+
+Gates passed:
+  - /implement  : Components 1+2 + contract bridge + E2E (bd-2wo.38.1–.4 closed)
+  - /review-sprint : All good (with noted concerns); 1 robustness bug fixed
+  - /audit-sprint  : APPROVED — AC-13 (auth byte-unchanged) + AC-14 (no-embed) verified
+
+Tests: full suite 548 pass / 0 fail. 11/11 SDD §7.2 cases + adapter matrix.
+
+Tracked follow-ups (non-blocking):
+  - bd-9qj : openapi-zod converter crashes on z.array body schema (workaround: in-handler validate)
+  - bd-eda : pre-existing building-wide 5xx info-disclosure (asHyperError returns e.message)
+  - OQ-3   : confirm route auth posture + rate-limiting BEFORE the gated dashboard cutover (MEDIUM-1)

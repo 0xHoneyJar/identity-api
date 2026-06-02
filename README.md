@@ -6,6 +6,16 @@
 > (rename done; threat model + Discord/TG verifier flow + issuer sequencing + package
 > cardinality + vendor-coupling + Dynamic-as-legacy still pending).
 
+> ⚠ **ISSUER DOCTRINE SUPERSEDED (2026-06-01)** — `grimoires/loa/prd.md` (PRD v3.0) +
+> `grimoires/loa/2026-06-01-auth-decision-reconciled.md` are authoritative. Statements below
+> that *"the JWKS server runtime lives in `loa-freeside/apps/gateway` (Rust)"* and *"this
+> module ships a validator, NOT a signer"* reflect the 2026-04 stance and are **stale**.
+> PRD v3.0: identity-api ships an **in-repo local ES256 signer**
+> (`packages/adapters/src/local-es256-signer.ts`) serving its own JWKS; the loa-freeside
+> gateway is a **preserved delegation seam, not v1** (and is in fact a Discord/NATS gateway
+> with no `/jwks` or `/issue` route). The full README/INTENT/BeaconV3 rewrite to the SoR
+> posture is Phase-1 G-1 work (lands through review).
+
 > The freeside-* installable module for **auth** across the THJ
 > ecosystem — wallet → canonical user, multi-credential linking
 > (SIWE / passkey / Discord-bot / Telegram-bot / Dynamic-legacy),

@@ -1,5 +1,8 @@
 # Session — Auth Vertical: Better Auth seam (sovereign-auth cutover)
 
+> ⛔ **SUPERSEDED (2026-06-01, operator-ratified) — see `grimoires/loa/2026-06-01-auth-decision-reconciled.md`.**
+> This build doc's premise (*"we're not hand-building auth anymore"* / DROP the shipped stack + adopt Better Auth as issuer) was a **confabulation** off the stale-`open` `bd-2wo` beads. The hand-built ES256 stack is **shipped + reviewed**. Corrected decision: **keep it as issuer/SoR; Better Auth = a per-world credential adapter behind `CredentialBridge`**. Do not build from this doc.
+
 > The identity keystone. We're not hand-building auth anymore — we adopt Better Auth for the *person*, and build sovereign only where the cluster is actually novel: the *account*.
 
 ## Context

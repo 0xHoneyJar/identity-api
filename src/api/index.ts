@@ -47,7 +47,9 @@ import { authChallenge, authVerify } from "./routes/auth"
 import { me } from "./routes/me"
 import { resolveWallet, resolveAccount, resolveNym, getIdentity } from "./routes/resolve"
 import { getProfile, getMiberaDimensions } from "./routes/profile"
+import { resolveIdentityBatch } from "./routes/identity-resolve"
 import { linkVerifiedWallet } from "./routes/link"
+import { discordLinkInitiate, discordLinkCallback } from "./routes/discord-link"
 
 // W2.5 sprint-2 T-2.6 — cell-API-key-authenticated svc-JWT issuance.
 import { serviceJwtIssue } from "./routes/v1/auth/service-jwt"
@@ -81,7 +83,10 @@ const app = new Hyper()
     getIdentity,
     getProfile,
     getMiberaDimensions,
+    resolveIdentityBatch,
     linkVerifiedWallet,
+    discordLinkInitiate,
+    discordLinkCallback,
 
     serviceJwtIssue,
 

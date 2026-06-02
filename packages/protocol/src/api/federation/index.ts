@@ -36,11 +36,17 @@ export {
   ScoreTrustClassificationSchema,
   ScoreGetWalletPathSchema,
   ScoreGetWalletRespSchema,
+  ScoreResolveIdentityReqSchema,
+  ResolvedIdentitySchema,
+  ScoreResolveIdentityRespSchema,
   type ScoreCrowdTier,
   type ScoreEliteTier,
   type ScoreTrustClassification,
   type ScoreGetWalletPath,
   type ScoreGetWalletResp,
+  type ScoreResolveIdentityReq,
+  type ResolvedIdentity,
+  type ScoreResolveIdentityResp,
 } from "./score"
 
 export {

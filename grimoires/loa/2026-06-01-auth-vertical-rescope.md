@@ -1,5 +1,8 @@
 # Auth Vertical — re-scope to the Better-Auth seam + identity model
 
+> ⛔ **SUPERSEDED (2026-06-01, operator-ratified) — see `grimoires/loa/2026-06-01-auth-decision-reconciled.md`.**
+> This doc's *"DROP the hand-built canonical-user/jwks/credential-bridges, adopt Better Auth as the issuer"* framing was a **confabulation**: it read the stale-`open` `bd-2wo` beads as an unbuilt plan, but that stack is **shipped + reviewed** (built off-bead, T1.x→w2.5-sprint-3). Corrected decision: **keep the ES256 stack as issuer/SoR; Better Auth = a per-world credential adapter behind `CredentialBridge`** (PRD v3.0-sanctioned). Do not build from this doc.
+
 **date:** 2026-06-01 · **supersedes** the May-1 `bd-2wo` SDD's hand-built canonical-user plan · **decision:** Better Auth GO (running spike PASS, `bd-3n1` closed) · **for:** a fresh focused build session (`/kickoff`)
 
 ## Why re-scope

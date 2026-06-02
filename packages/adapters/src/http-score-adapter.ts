@@ -25,14 +25,21 @@
  * `~/Documents/GitHub/score-api/src/middleware/auth.ts`.
  */
 
-import { ScoreGetWalletRespSchema } from "@freeside-auth/protocol/api/federation/score"
+import {
+  ScoreGetWalletRespSchema,
+  ScoreResolveIdentityRespSchema,
+} from "@freeside-auth/protocol/api/federation/score"
 import type {
   ScorePort,
   ScoreGetScoreInput,
+  ScoreResolveIdentityInput,
   PortCallOpts,
   FederationResult,
 } from "@freeside-auth/ports"
-import type { ScoreGetWalletResp } from "@freeside-auth/protocol/api/federation/score"
+import type {
+  ScoreGetWalletResp,
+  ScoreResolveIdentityResp,
+} from "@freeside-auth/protocol/api/federation/score"
 import {
   federationHttpCall,
   stripTrailingSlash,
@@ -112,6 +119,34 @@ export class HttpScoreAdapter implements ScorePort {
       logger: this.logger,
       building: "score-api",
       context: { wallet: input.walletAddress, hasApiKey: this.apiKey !== undefined },
+    })
+  }
+
+  /**
+   * Batch-resolve wallets to group-aware onchain identities via score-api's
+   * `POST /v1/identity/resolve` (bd-2wo.38.1). Body is `{ wallets }` ONLY —
+   * score-api takes no `world_slug`. Response is a keyed map looked up
+   * lowercased by the caller. Same never-throws / FederationResult contract
+   * as `getScore`.
+   */
+  async resolveIdentity(
+    input: ScoreResolveIdentityInput,
+    opts?: PortCallOpts,
+  ): Promise<FederationResult<ScoreResolveIdentityResp>> {
+    const url = `${this.baseUrl}/v1/identity/resolve`
+    return federationHttpCall<ScoreResolveIdentityResp>({
+      url,
+      method: "POST",
+      headers: this.defaultHeaders,
+      body: { wallets: input.wallets },
+      responseSchema: ScoreResolveIdentityRespSchema,
+      portOpts: opts,
+      logger: this.logger,
+      building: "score-api",
+      context: {
+        walletCount: input.wallets.length,
+        hasApiKey: this.apiKey !== undefined,
+      },
     })
   }
 }

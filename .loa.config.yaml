@@ -65,6 +65,25 @@ integrations:
   - github
 
 # =============================================================================
+# Run Mode (Autonomous Sprint Execution)
+# =============================================================================
+# Enabled 2026-06-01 (operator decision) for the v1 POST /v1/identity/resolve
+# merge facade build (bd-2wo.38). Autonomous implement→review→audit with circuit
+# breaker; halts + surfaces on blocker. Pinned to the facade branch so the run
+# does NOT create a feature/release branch.
+run_mode:
+  enabled: true
+  defaults:
+    max_cycles: 20
+    timeout_hours: 8
+  sprint_plan:
+    branch_prefix: ""
+    default_branch_name: "w2.5-identity-resolve-facade"
+    consolidate_pr: true
+    commit_prefix: "feat"
+    include_commits_by_sprint: true
+
+# =============================================================================
 # Framework Upgrade Behavior
 # =============================================================================
 upgrade:
