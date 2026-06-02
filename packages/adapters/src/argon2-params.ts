@@ -81,3 +81,30 @@ export const BUN_PASSWORD_HASH_OPTIONS = {
   memoryCost: ARGON2ID_PARAMS.memoryCost,
   timeCost: ARGON2ID_PARAMS.timeCost,
 } as const;
+
+/**
+ * Pluggable argon2id verify contract — consumed by the denylist-check
+ * route handler (and the cell-API-key auth path in general) to verify
+ * an incoming raw key against a stored `$argon2id$v=19$...` hash.
+ *
+ * Defined here (not in the route file) so production + tests share one
+ * shape and so `@freeside-auth/adapters` can re-export it through its
+ * barrel. Production wires `Bun.password.verify` behind this surface;
+ * tests wire deterministic mocks.
+ *
+ * Authored 2026-05-26 to close the Sprint 2 T-2.7 export-without-decl
+ * regression (PR #26 added `export { type IArgon2idVerifier }` in the
+ * adapters barrel but never declared the interface in this module). The
+ * route handler at `src/api/routes/v1/auth/denylist/check.ts` was
+ * already using it via the dangling re-export; this materializes the
+ * type so typecheck closes cleanly across the workspace.
+ */
+export interface IArgon2idVerifier {
+  /**
+   * Verify `rawKey` against `storedHash`. Returns `true` on match,
+   * `false` on mismatch. Implementations MAY throw on internal errors
+   * (e.g., malformed stored hash); the route handler maps thrown
+   * exceptions to 503 per the cell-API-key auth fail-CLOSED policy.
+   */
+  verify(rawKey: string, storedHash: string): Promise<boolean>;
+}

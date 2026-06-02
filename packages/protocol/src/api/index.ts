@@ -66,6 +66,21 @@ export {
   type LinkVerifiedWalletConflict,
 } from "./link"
 
+export {
+  IdentityResolveReqSchema,
+  DisplaySourceSchema,
+  ReachableSchema,
+  IdentityResolveDiscordSchema,
+  IdentityResolveEntrySchema,
+  IdentityResolveRespSchema,
+  type IdentityResolveReq,
+  type DisplaySource,
+  type Reachable,
+  type IdentityResolveDiscord,
+  type IdentityResolveEntry,
+  type IdentityResolveResp,
+} from "./identity-resolve"
+
 // ─── CM→world authorization read (C-2 · bead arrakis-491i) ───────────────────
 export {
   ManagedWorldSchema,
@@ -103,11 +118,17 @@ export {
   ScoreTrustClassificationSchema,
   ScoreGetWalletPathSchema,
   ScoreGetWalletRespSchema,
+  ScoreResolveIdentityReqSchema,
+  ResolvedIdentitySchema,
+  ScoreResolveIdentityRespSchema,
   type ScoreCrowdTier,
   type ScoreEliteTier,
   type ScoreTrustClassification,
   type ScoreGetWalletPath,
   type ScoreGetWalletResp,
+  type ScoreResolveIdentityReq,
+  type ResolvedIdentity,
+  type ScoreResolveIdentityResp,
   CodexArchetypeSchema,
   CodexElementSchema,
   CodexSwagRankSchema,

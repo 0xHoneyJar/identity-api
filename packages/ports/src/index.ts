@@ -81,6 +81,7 @@ export {
 export {
   type ScorePort,
   type ScoreGetScoreInput,
+  type ScoreResolveIdentityInput,
 } from './score.port';
 
 // mibera-codex federation port — per-tokenId 7-dim Mibera profile.

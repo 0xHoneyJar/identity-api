@@ -32,6 +32,24 @@
         "pg": "^8.11.0",
       },
     },
+    "packages/auth-sdk": {
+      "name": "@freeside-auth/auth-sdk",
+      "version": "0.1.0",
+      "dependencies": {
+        "@freeside-auth/adapters": "workspace:*",
+        "@freeside-auth/protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/schema": "^0.75",
+        "effect": "^3.10.0",
+        "jose": "^6.2.3",
+      },
+      "peerDependencies": {
+        "@effect/schema": "^0.75",
+        "effect": "^3.10.0",
+        "jose": "^6.0.0",
+      },
+    },
     "packages/engine": {
       "name": "@freeside-auth/engine",
       "version": "0.1.0",
@@ -98,6 +116,8 @@
     "@effect/schema": ["@effect/schema@0.75.5", "", { "dependencies": { "fast-check": "^3.21.0" }, "peerDependencies": { "effect": "^3.9.2" } }, "sha512-TQInulTVCuF+9EIbJpyLP6dvxbQJMphrnRqgexm/Ze39rSjfhJuufF7XvU3SxTgg3HnL7B/kpORTJbHhlE6thw=="],
 
     "@freeside-auth/adapters": ["@freeside-auth/adapters@workspace:packages/adapters"],
+
+    "@freeside-auth/auth-sdk": ["@freeside-auth/auth-sdk@workspace:packages/auth-sdk"],
 
     "@freeside-auth/engine": ["@freeside-auth/engine@workspace:packages/engine"],
 

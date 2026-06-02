@@ -66,9 +66,18 @@ export {
   claimNymWithAudit,
   setPrimaryWithAudit,
   resolveOrMintByWallet,
+  normalizeAddress,
   WalletLinkRaceError,
   type AuditActor,
 } from './resolve-spine';
+
+// Per-wallet merge resolver (bd-2wo.38.2 · POST /v1/identity/resolve).
+// Pure: joins spine identity + score-api onchain enrichment and applies the
+// display-name priority ONCE (world_nym > discord > score > address).
+export {
+  mergeIdentity,
+  type MergeIdentityInput,
+} from './merge-identity';
 
 // Auth nonce orchestrators (T1.4 · FR-A1 lifecycle: mint + atomic consume +
 // audit pairing). T1.6's /v1/auth/challenge + /v1/auth/verify import from here.
@@ -137,3 +146,13 @@ export {
   type ConflictDecision,
   type ConflictResolver,
 } from './link-verified-wallet';
+
+// Link-verified-credential (bd-2wo.14 · Discord-social OAuth-verification
+// front-end). The SESSION-keyed sibling of linkVerifiedWallet — composes the
+// SAME resolveByAccount + linkAccountWithAudit primitives + reuses
+// LinkCrossUserCollisionError. No new minting/collision/idempotency logic.
+export {
+  linkVerifiedCredential,
+  type LinkVerifiedCredentialInput,
+  type LinkVerifiedCredentialResult,
+} from './link-verified-credential';

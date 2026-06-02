@@ -29,7 +29,10 @@
  * `~/Documents/GitHub/score-api/src/routes/wallets.ts`.
  */
 
-import type { ScoreGetWalletResp } from "@freeside-auth/protocol/api/federation/score"
+import type {
+  ScoreGetWalletResp,
+  ScoreResolveIdentityResp,
+} from "@freeside-auth/protocol/api/federation/score"
 import type { FederationResult } from "./federation-result"
 import type { PortCallOpts } from "./port-opts"
 
@@ -43,6 +46,16 @@ import type { PortCallOpts } from "./port-opts"
 export interface ScoreGetScoreInput {
   /** 0x-prefixed 40-char EVM wallet address. */
   readonly walletAddress: string
+}
+
+/**
+ * Input to `resolveIdentity` — a BATCH of wallet addresses (≤100). score-api
+ * keys its response map by the LOWERCASED wallet; the caller is responsible
+ * for normalizing before the call and for the lowercased lookup after.
+ */
+export interface ScoreResolveIdentityInput {
+  /** 1..100 wallet addresses (0x-prefixed 40-char EVM). */
+  readonly wallets: readonly string[]
 }
 
 // ─── port ──────────────────────────────────────────────────────────────────
@@ -85,4 +98,27 @@ export interface ScorePort {
     input: ScoreGetScoreInput,
     opts?: PortCallOpts,
   ): Promise<FederationResult<ScoreGetWalletResp>>
+
+  /**
+   * Batch-resolve a set of wallets to their group-aware onchain identities
+   * (display_name / beraname / ens_name / twitter_handle) via score-api's
+   * `POST /v1/identity/resolve` — distinct from `getScore`'s scores-only
+   * `GET /v1/wallets/:address` surface (bd-2wo.38.1).
+   *
+   * Returns `ScoreResolveIdentityResp` (a KEYED MAP
+   * `{ identities: Record<lowercased-wallet, ResolvedIdentity> }`) on success,
+   * or a `FederationFailure` on any error.
+   *
+   * Same never-throws contract as `getScore`: failures DO NOT throw — they
+   * return as `{ ok: false, reason }` so the `/v1/identity/resolve` merge
+   * facade can mark the batch `degraded` and still answer 200. `opts.signal`
+   * is forwarded to `fetch` for the per-source timeout budget; abort →
+   * `{ ok: false, reason: { kind: 'timeout', ... } }`. 401 → `unauthorized`,
+   * 404 → `not_found`, 429 → `rate_limited`, 5xx → `upstream_5xx`, schema
+   * drift → `parse_error`.
+   */
+  resolveIdentity(
+    input: ScoreResolveIdentityInput,
+    opts?: PortCallOpts,
+  ): Promise<FederationResult<ScoreResolveIdentityResp>>
 }
