@@ -73,9 +73,12 @@ export const resolveIdentityBatch = route
     // ONE batched score-api call (the dominant latency term) under a per-source
     // AbortController. A miss/timeout degrades the WHOLE batch (score is a
     // single call) — it never propagates as a 5xx.
-    const timeoutMs = Number(
-      process.env.IDENTITY_RESOLVE_SCORE_TIMEOUT_MS ?? DEFAULT_SCORE_TIMEOUT_MS,
-    )
+    // Guard against a misconfigured env: Number("abc") → NaN, and
+    // setTimeout(NaN) fires immediately → every request would silently degrade
+    // to spine-only. Fall back to the default on NaN / non-positive.
+    const envTimeout = Number(process.env.IDENTITY_RESOLVE_SCORE_TIMEOUT_MS)
+    const timeoutMs =
+      Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : DEFAULT_SCORE_TIMEOUT_MS
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), timeoutMs)
     let scoreResult
