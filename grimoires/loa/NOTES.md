@@ -1,13 +1,10 @@
 # Project Notes
 
-## ▶ RESUME HERE (fresh session) — build the v1 /v1/identity/resolve facade
+## ▶ RESUME HERE (fresh session) — v1 /v1/identity/resolve facade is SHIPPED (PR #33)
 
-Planning gate is DONE for `bd-2wo.38` (ratified GitHub #32). Artifacts landed + committed:
-- requirements: `grimoires/loa/prd.md` (v3.0, G-5) + the ratification comment on `0xHoneyJar/identity-api#32`
-- design: `grimoires/loa/sdd.md` (feature-scoped; Phase A/B/C task breakdown; `[ASSUMPTION]` T-A1 is ALREADY grounded — score-api `POST /v1/identity/resolve` verified at `score-api/src/routes/identity.ts:27-71`)
-- bead: `bd-2wo.38` (full task spec + pinned contract)
+**2026-06-02 — `bd-2wo.38` BUILT + audit-APPROVED.** Full Loa cycle ran: `/sprint-plan → /run` (implement→review→audit) → **DRAFT PR [#33](https://github.com/0xHoneyJar/identity-api/pull/33)** (base `w2.5-sprint-3-auth-sdk-source-distributed`, head `w2.5-identity-resolve-facade`). Children `bd-2wo.38.1–.4` closed. Full suite 548 pass / 0 fail. AC-13 (auth byte-unchanged) + AC-14 (no-embed) verified. SDD ground-corrected to v1.1 (score response is a **keyed map** not an array; `{wallets}`-only to score; score tier gated on a real onchain name — OQ-6). Decisions resolved this session: OQ-5 = string-enum (pinned), OQ-6 = score-tier-real-name-only.
 
-**Next:** `/sprint-plan` (consume the SDD's Phase A/B/C breakdown) → `/run sprint-N` (implement→review→audit). Two tasks: (1) `ScorePort.resolveIdentity` → score-api binding; (2) the `POST /v1/identity/resolve` route. Open design Q for the build: **OQ-5** (`reachable` tri-state as string-enum — contract window is open, cheap to confirm). Build runs PARALLEL to #11; dashboard CUTOVER stays gated on #11 P1 + world-identity backfill coverage (prod: 5 users / 3 nyms — backfill ran, coverage tiny). Held-open: per-world nym vs unified freeside-nym.
+**Next (NOT this build — gated):** the dashboard **CUTOVER** (point `IDENTITY_RESOLVE_URL` at the live route) stays gated on #11 P1 + world-identity backfill coverage. **Before cutover, resolve OQ-3** — route auth posture + rate-limiting (it's open-read today, batch-exposes wallet→{user_id,discord_id,nyms}; same data class as the existing open `/v1/profile`, ships behind the contract-first bridge so not live). Tracked: `bd-9qj` (openapi-zod can't take a `z.array` body schema → validate in-handler), `bd-eda` (pre-existing 5xx message disclosure). Held-open: per-world nym vs unified freeside-nym; twitter-as-linked-account v2 (`bd-2wo.39`).
 
 ## Learnings
 
