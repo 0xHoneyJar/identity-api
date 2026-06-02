@@ -31,8 +31,30 @@ export type IdentityResolveReq = z.infer<typeof IdentityResolveReqSchema>
 
 // ─── response ─────────────────────────────────────────────────────────────
 
-/** Which priority tier produced the FINAL `display_name`. */
-export const DisplaySourceSchema = z.enum(["world_nym", "discord", "score", "address"])
+/**
+ * Which priority tier produced the FINAL `display_name`.
+ *
+ * The original tiers (world_nym/discord/score/address) are the pre-#11
+ * merge-identity precedence. A4 (#11 Phase 1) adds the registry tiers projected
+ * by `resolveDisplayName`:
+ *   - `generated`      — the spine-minted MIBERA-XXXX handle (the privacy floor)
+ *   - `claimed_nym`    — a user-authored world name (registry, beats generated)
+ *   - `raw_short_addr` — the shortened address; ONLY surfaces under explicit
+ *                        opt-in (includeOptIn:true). NEVER the default.
+ *
+ * `address` is retained for the legacy merge-identity fallback; `raw_short_addr`
+ * is its privacy-aware successor (opt-in, never default). Additive — existing
+ * consumers that switch on the original four are unaffected.
+ */
+export const DisplaySourceSchema = z.enum([
+  "world_nym",
+  "discord",
+  "score",
+  "address",
+  "generated",
+  "claimed_nym",
+  "raw_short_addr",
+])
 export type DisplaySource = z.infer<typeof DisplaySourceSchema>
 
 /**

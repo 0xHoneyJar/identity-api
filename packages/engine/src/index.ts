@@ -79,6 +79,18 @@ export {
   type MergeIdentityInput,
 } from './merge-identity';
 
+// Privacy-default name resolver (A4 · identity-api #11 Phase 1). Pure: projects
+// SpineWorldName[] into a single display-name + source. The generated
+// MIBERA-XXXX handle is the default-display floor; the raw shortened address is
+// an explicit, NEVER-default opt-in (includeOptIn:true). The in-memory twin of
+// the 0008 recompute trigger. Wired into BOTH /v1/profile + /v1/identity/resolve
+// + JWT display claims (A5).
+export {
+  resolveDisplayName,
+  type ResolveDisplayNameOptions,
+  type ResolvedDisplayName,
+} from './resolve-display-name';
+
 // Auth nonce orchestrators (T1.4 · FR-A1 lifecycle: mint + atomic consume +
 // audit pairing). T1.6's /v1/auth/challenge + /v1/auth/verify import from here.
 export {
