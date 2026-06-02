@@ -147,6 +147,21 @@ export {
   type ConflictResolver,
 } from './link-verified-wallet';
 
+// Link-wallet-only orchestrator (A3 · identity-api #11 Phase 1). Admits
+// WALLET-ONLY users (no discord) — the 189 midi users linkVerifiedWallet
+// cannot serve. Mirrors linkVerifiedWallet minus the discord axis; adds the
+// hoisted name step (claim-or-import). NEVER writes provider='discord'.
+export {
+  linkWalletOnly,
+  firstClaimResolver,
+  type LinkWalletOnlyInput,
+  type LinkWalletOnlyResult,
+  type ImportedName,
+  type WalletOnlyConflictState,
+  type WalletOnlyConflictDecision,
+  type WalletOnlyConflictResolver,
+} from './link-wallet-only';
+
 // Link-verified-credential (bd-2wo.14 · Discord-social OAuth-verification
 // front-end). The SESSION-keyed sibling of linkVerifiedWallet — composes the
 // SAME resolveByAccount + linkAccountWithAudit primitives + reuses
