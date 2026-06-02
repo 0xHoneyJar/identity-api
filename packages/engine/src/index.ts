@@ -58,6 +58,8 @@ export {
   resolveByAccount,
   resolveByNym,
   getIdentity,
+  // C-2 (bead arrakis-491i) — CM→world authorization read
+  getManagedWorlds,
   mintUser,
   linkWalletWithAudit,
   linkAccountWithAudit,

@@ -45,6 +45,7 @@ import type {
   SpinePort,
   SpineLinkedAccountProvider,
   SpineIdentityShape,
+  SpineManagedWorld,
   SpineAuditEvent,
   MintNonceInput,
   MintNonceResult,
@@ -60,6 +61,8 @@ export type {
   SpineWallet,
   SpineLinkedAccount,
   SpineWorldIdentity,
+  // C-2 (bead arrakis-491i) — CM→world authorization relation read shape
+  SpineManagedWorld,
   SpineIdentityShape,
   SpineAuditEvent,
   // T1.4 nonce types — re-exported for ergonomic single-import consumption
@@ -98,6 +101,24 @@ const DEFAULT_NONCE_TTL_SECONDS = 300
  * collisions over the lifetime of this table.
  */
 const NONCE_BYTES = 32
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Coerce a Bun.SQL timestamptz value to an ISO-8601 string.
+ *
+ * Bun.SQL hydrates `timestamptz` columns as JS `Date` objects, but the
+ * SpinePort read shapes declare these as `string` (and the wire contract is
+ * an ISO string). This normalizes either form to a stable ISO string:
+ *   - `Date`   → `.toISOString()`
+ *   - `string` → returned as-is (already serialized — e.g. a mock SQL handle)
+ * Used by C-2 `getManagedWorlds`. (The older spine reads leak the raw Date and
+ * rely on JSON.stringify at the route boundary — see the getManagedWorlds
+ * comment for why this method normalizes at the adapter instead.)
+ */
+function toIsoString(v: string | Date): string {
+  return v instanceof Date ? v.toISOString() : v
+}
 
 // ─── errors ─────────────────────────────────────────────────────────────────
 
@@ -381,6 +402,42 @@ export class PostgresSpineAdapter implements SpinePort {
         joined_at: wi.joined_at,
       })),
     }
+  }
+
+  /**
+   * C-2 (bead arrakis-491i): getManagedWorlds — the worlds a user manages.
+   *
+   * Reads `world_managers` (migration 0007), the SoR for "who manages which
+   * world." One row per management edge; ordered `granted_at ASC` for a
+   * stable oldest-first listing. Returns `[]` for a user with no management
+   * edges (a non-manager is a valid state, not a 404 at this layer).
+   *
+   * The query is served by the PK's `(user_id, world_slug)` prefix index —
+   * no separate user_id index is needed (mirrors how getIdentity's child
+   * lookups ride their FK indexes).
+   *
+   * `granted_by` is intentionally NOT selected — the management-resolution
+   * read answers "which worlds + since when", not "by whom".
+   */
+  async getManagedWorlds(userId: string): Promise<readonly SpineManagedWorld[]> {
+    const sql = this.sql
+    const rows = (await sql`
+      SELECT world_slug, granted_at
+        FROM world_managers
+       WHERE user_id = ${userId}
+       ORDER BY granted_at ASC
+    `) as Array<{ world_slug: string; granted_at: string | Date }>
+    return rows.map((r) => ({
+      world_slug: r.world_slug,
+      // Bun.SQL returns timestamptz as a JS Date; the port contract declares
+      // `granted_at: string` (and the wire shape is an ISO string). We coerce
+      // here so the in-memory return type matches the declared `string` type
+      // — stricter than the sibling reads (getIdentity et al. leak the raw
+      // Date and rely on jsonResponse's JSON.stringify to ISO-ify at the wire
+      // boundary). Normalizing at the adapter is the right contract for a SoR
+      // read that freeside-config (C-1) consumes structurally.
+      granted_at: toIsoString(r.granted_at),
+    }))
   }
 
   // ── writes (FR-R6) ────────────────────────────────────────────────────────

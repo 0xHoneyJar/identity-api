@@ -87,6 +87,11 @@ function buildMockSpine(): MockSpine {
     async getIdentity(userId) {
       return userToIdentity.get(userId) ?? null
     },
+    // C-2 (bead arrakis-491i): SpinePort gained getManagedWorlds; this mock
+    // doesn't exercise it, so a [] stub satisfies the interface.
+    async getManagedWorlds() {
+      return []
+    },
     async mintUser() {
       return "00000000-0000-4000-8000-000000000001"
     },

@@ -37,6 +37,8 @@ export {
   type SpineWallet,
   type SpineLinkedAccount,
   type SpineWorldIdentity,
+  // C-2 (bead arrakis-491i) — CM→world authorization relation read shape
+  type SpineManagedWorld,
   type SpineIdentityShape,
   type SpineAuditEvent,
   // T1.4 nonce lifecycle types (FR-A1)

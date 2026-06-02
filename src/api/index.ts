@@ -56,6 +56,10 @@ import { serviceJwtIssue } from "./routes/v1/auth/service-jwt"
 
 import { denylistCheck } from "./routes/v1/auth/denylist/check"
 
+// C-2 (bead arrakis-491i) — CM→world authorization read (the SoR
+// freeside-config calls to authorize a community-manager theme write).
+import { getManagedWorldsRoute } from "./routes/v1/users/managed-worlds"
+
 
 // ---------------------------------------------------------------------------
 // App composition.
@@ -91,6 +95,8 @@ const app = new Hyper()
     serviceJwtIssue,
 
     denylistCheck,
+
+    getManagedWorldsRoute,
 
   ] as unknown as readonly Route[])
 

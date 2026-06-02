@@ -226,6 +226,10 @@ function buildMockSpine(): MockSpine {
       if (m.getIdentityThrows) throw m.getIdentityThrows
       return getIdentityReturn === UNSET ? IDENTITY_FIXTURE : getIdentityReturn
     },
+    // C-2 (bead arrakis-491i): SpinePort gained getManagedWorlds; stub.
+    async getManagedWorlds() {
+      return []
+    },
     async mintUser() {
       return "unused"
     },

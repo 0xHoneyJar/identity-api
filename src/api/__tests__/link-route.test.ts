@@ -69,6 +69,10 @@ function buildMockSpine(): MockSpine {
     async getIdentity(): Promise<SpineIdentityShape | null> {
       return null
     },
+    // C-2 (bead arrakis-491i): SpinePort gained getManagedWorlds; stub.
+    async getManagedWorlds() {
+      return []
+    },
     async mintUser() {
       _mintCounter += 1
       linkCalls.push({ method: "mintUser", args: { counter: _mintCounter } })
