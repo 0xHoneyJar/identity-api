@@ -3,7 +3,7 @@
 **Version:** 1.0
 **Date:** 2026-06-01
 **Author:** Architecture Designer Agent
-**Status:** Draft (pending Flatline adversarial review — the gate)
+**Status:** Grounded v1.1 — OQ-2 resolved against the score-api checkout (2026-06-01). Planning gate CLOSED per operator; build gate = Loa `/sprint-plan` → `/run` (implement→review→audit). Flatline not run on the SDD (operator decision 2026-06-01).
 **Scope:** FEATURE-SCOPED. This SDD designs ONLY the v1 server-side merge facade
 (`POST /v1/identity/resolve`) under PRD v3.0 goal **G-5** (read-time compose, no-embed),
 delivered as bead `bd-2wo.38`. It does NOT (re)architect the identity-api SoR — the spine,
@@ -117,7 +117,15 @@ This feature ships **TWO bounded components** (per `bd-2wo.38`).
     `federationHttpCall({ method: "POST", body, responseSchema, ... })`
     (`packages/adapters/src/federation-http.ts:106` already supports POST + body).
   - A sealed Zod response schema in `packages/protocol/src/api/federation/score.ts`
-    (sibling to `ScoreGetWalletRespSchema`), `.loose()` for forward-compat.
+    (sibling to `ScoreGetWalletRespSchema`), `.loose()` for forward-compat. **Grounded shape
+    (2026-06-01 — score-api `src/routes/identity.ts:25-37`, `types/dynamic.types.ts:94-132`):**
+    the response is a **KEYED MAP** `{ identities: Record<lowercased-wallet, ResolvedIdentity> }`
+    — NOT an array. `ResolvedIdentity = { wallet, display_name (non-null), ens_name|null,
+    beraname|null, basename|null, twitter_handle|null, pfp_url|null, twitter_source|null }`.
+    The facade consumes `display_name` + `beraname`/`ens_name`/`twitter_handle`; it does **NOT**
+    surface score's `basename`/`pfp_url`/`twitter_source` in v1 (not in the ratified #32 contract).
+    The request body is `{ wallets }` **only** (no `world_slug` — score-api is wallet-only,
+    EVM `0x+40hex`, batch ≤100, auth-gated `X-API-Key`).
 - **Interfaces exposed:** the port method (consumed by the route only).
 - **Dependencies:** `federation-http.ts` transport; `@freeside-auth/protocol/api/federation/score`
   for the response schema. Same building, same `X-API-Key` auth (`SCORE_API_KEY_HEADER`,
@@ -187,7 +195,8 @@ sequenceDiagram
 display_name (FINAL) =
   world_nym                       (world_identities[world_slug].nym, if world_slug given & present)
   ELSE discord id-only label      (linked_accounts[provider=discord].external_id present → discord tier)
-  ELSE score-api display_name     (score enrich .display_name, if score reached & non-null)
+  ELSE score-api display_name     (ONLY if score reached AND score resolved a REAL onchain name —
+                                   i.e. beraname OR ens_name OR twitter_handle is non-null. See ▼)
   ELSE address                    (the wallet itself — always-available fallback)
 display_source = which tier won ("world_nym" | "discord" | "score" | "address")
 ```
@@ -196,6 +205,14 @@ display_source = which tier won ("world_nym" | "discord" | "score" | "address")
 > NOT re-implement `beraname > ENS > twitter` resolution — `beraname` / `ens_name` /
 > `twitter_handle` are RAW PASSTHROUGH tooltip fields only. That chain is score-api's job
 > (score-vs-identity boundary, per repo `CLAUDE.md` hard rules).
+>
+> ▼ **Grounded (2026-06-01): score-api `display_name` is NEVER null** — it self-truncates to
+> the wallet (`computeDisplayName`, score-api `services/identity.service.ts:68-78`) when no
+> onchain name exists. So the `score` tier fires ONLY when score resolved a REAL name
+> (`beraname`/`ens_name`/`twitter_handle` non-null); otherwise the facade falls through to the
+> `address` tier. This reads the passthrough fields for PRESENCE only (not to rank/construct a
+> name) — boundary intact. Keeps `display_source="address"` a real, honest outcome.
+> (Operator decision 2026-06-01: "real onchain name only".)
 >
 > v2 forward-compat (per #11 comment 2026-06-01): score-api's `twitter_handle` is *scraped
 > from Dynamic* (the provider #11 replaces). When twitter becomes a first-class identity-api
@@ -227,12 +244,17 @@ grouping authority.
 > existing wired client is bound to `GET /v1/wallets/:address` (scores-only) — this is a
 > NEW binding to a DIFFERENT score-api endpoint, same building and same auth.
 
-**[ASSUMPTION]** score-api exposes `POST /v1/identity/resolve` accepting a `{ wallets[] }`
-batch and returning a per-wallet array of `{ wallet, display_name, beraname?, ens_name?,
-twitter_handle? }`. The exact wire shape MUST be confirmed against the score-api checkout
-(`~/Documents/GitHub/score-api/src/routes/`) before T-A1 implementation — if score-api only
-offers a per-wallet GET, Component 1 degrades to N parallel calls behind the same port method
-(see Risk R-3). This is the single ungrounded contract dependency in the design.
+**[GROUNDED 2026-06-01 — OQ-2 RESOLVED]** score-api exposes `POST /v1/identity/resolve`
+(`src/routes/identity.ts:25-37`, auth-gated `X-API-Key` via `index.ts:90`). **Request:**
+`{ wallets: string[] }` — EVM `0x+40hex` only, `.min(1).max(100)`, **no `world_slug` param**.
+**Response:** a **KEYED MAP** `{ identities: Record<lowercased-wallet, ResolvedIdentity> }` (NOT
+an array — `types/dynamic.types.ts:130-132`), where every requested wallet is guaranteed present
+(empty-name fallback, `services/identity.service.ts:253-261`). `ResolvedIdentity =
+{ wallet, display_name (non-null), ens_name|null, beraname|null, basename|null,
+twitter_handle|null, pfp_url|null, twitter_source|null }`. Resolution is **group-aware**
+(`resolve_wallet_group` RPC → first-non-null-wins across the wallet group). The
+N-parallel-call fallback (old Risk R-3) is therefore NOT needed — one batched POST suffices;
+the route looks up `resp.identities[wallet.toLowerCase()]`.
 
 ### 1.7 Deployment Architecture
 
@@ -384,12 +406,20 @@ before the server route is deployed. The server side ships the sealed Zod respon
 ```ts
 // packages/protocol/src/api/identity-resolve.ts
 export const IdentityResolveReqSchema = z.object({
-  wallets: z.array(WalletAddressParamSchema)   // reuse resolve.ts:26-28 EIP-55/hex regex
+  wallets: z.array(WalletAddressParamSchema)   // reuse resolve.ts:26-28 — plain 0x+40hex, case-INSENSITIVE (NOT EIP-55 checksum)
     .min(1)
     .max(100),                                  // hard batch cap
-  world_slug: WorldSlugParamSchema.optional(),  // reuse resolve.ts:42-44
+  world_slug: WorldSlugParamSchema.optional(),  // reuse resolve.ts:42-44 — facade-internal (spine nym tier); NOT forwarded to score-api
 })
 ```
+
+> **Normalization (grounded):** `WalletAddressParamSchema` (`resolve.ts:26-28`) is
+> `/^0x[a-fA-F0-9]{40}$/` — plain hex, **case-insensitive**, NOT EIP-55 checksum-enforcing.
+> The route MUST lowercase-normalize each wallet (mirroring `resolveByWallet`'s
+> `normalizeAddress`, `resolve-spine.ts:49-54`) before (a) spine resolve, (b) dedupe, and
+> (c) score-map lookup (`resp.identities[wallet.toLowerCase()]` — score keys by lowercased
+> wallet). Echo the normalized form in `results[].wallet` so the contract is order- AND
+> case-stable.
 
 ### 5.3 Response schema (`IdentityResolveRespSchema`)
 
@@ -488,8 +518,8 @@ const url = `${this.baseUrl}/v1/identity/resolve`
 return federationHttpCall<ScoreResolveIdentityResp>({
   url, method: "POST",
   headers: this.defaultHeaders,            // includes X-API-Key
-  body: { wallets, world_slug },           // batch ≤100
-  responseSchema: ScoreResolveIdentityRespSchema,  // NEW sealed schema, .loose()
+  body: { wallets },                       // batch ≤100, EVM 0x+40hex — NO world_slug (score is wallet-only)
+  responseSchema: ScoreResolveIdentityRespSchema,  // NEW sealed schema: { identities: Record<wallet, ResolvedIdentity> } .loose()
   portOpts: opts,                          // forwards AbortSignal
   logger: this.logger,
   building: "score-api",
@@ -524,14 +554,20 @@ stateDiagram-v2
 | Axis | Failure | Entry effect | Batch effect |
 |------|---------|--------------|--------------|
 | Spine | wallet not linked | `user_id=null`, falls through priority to `address` | 200, entry present |
-| Score | `FederationResult.ok===false` (timeout/401/404/5xx/parse) | `degraded=true`, score-derived fields (`display_name` if it would have been the winning tier, `beraname`/`ens`/`twitter`) → null/fallback | 200, entry present |
+| Score | `FederationResult.ok===false` (timeout/401/404/5xx/parse) | `degraded=true`, score-derived fields (`display_name` if `score` would have won, `beraname`/`ens`/`twitter`) → null/fallback | 200, entry present |
+
+> **Score degrade is per-BATCH, not per-wallet.** Component 1 makes ONE batched POST, and
+> score-api guarantees every requested wallet is present in the response map (empty-name
+> fallback). So there is no per-wallet score 404: either the single call succeeds (ALL entries
+> `degraded=false`, each enriched — some possibly with no real onchain name) or it fails (ALL
+> entries `degraded=true`). `degraded` is computed once and applied uniformly across the batch.
 
 ### 6.2 Error categories
 
 | Category | HTTP | Trigger | Handling |
 |----------|------|---------|----------|
 | Validation | 400 | >100 wallets, bad hex, bad world_slug | reject whole request (Zod `.body()` + envelope) |
-| Score degrade | (none — 200) | score-api unreachable/4xx/5xx/timeout | per-wallet `degraded=true`; **never propagates** |
+| Score degrade | (none — 200) | score-api unreachable/4xx/5xx/timeout | ALL entries `degraded=true` (score is ONE batched call — degrade is per-batch, not per-wallet); **never propagates** |
 | Spine miss | (none — 200) | wallet not linked | per-wallet `user_id=null`, `display_source="address"` |
 | Spine I/O failure | 500 | real Postgres outage (engine throws non-`not_found`) | propagate to global error handler — the spine is the SoR substrate (NFR-2: isolation degrades compose, NOT the spine itself; `profile.ts:120-130`, `prd.md:L216`) |
 
@@ -582,9 +618,11 @@ Test-first. Each component lands with tests before wiring (Karpathy Goal-Driven)
 3. **Discord shape:** resolves to `{ id: external_id, linked: true }`; soft-unlinked
    (`unlinked_at` set) → `linked:false` (or `discord:null` per resolved policy — confirm).
    Never a `username`/`handle` field.
-4. **Partial failure — one bad wallet:** a batch of 3 where wallet #2 has no spine link AND
-   score 404s for it → 200, entry #2 has `user_id=null`, `display_source="address"`,
-   `degraded=true`; entries #1/#3 unaffected.
+4. **Partial failure — spine miss for one wallet:** a batch of 3 where wallet #2 has no spine
+   link (the batched score call succeeds) → 200, entry #2 has `user_id=null`,
+   `display_source="address"` (no nym/discord, and score has no real onchain name for it),
+   `degraded=false`; entries #1/#3 unaffected. (Score degrade is per-BATCH — see case 5 — so a
+   single wallet cannot be `degraded` while its siblings are not.)
 5. **Score outage — whole-source degrade:** score-api times out for the batch → all entries
    `degraded=true`, spine-derived tiers (world_nym/discord/address) still resolve, 200 OK.
 6. **Batch bound:** 101 wallets → 400; 0 wallets → 400; 100 wallets → ok.
@@ -593,6 +631,14 @@ Test-first. Each component lands with tests before wiring (Karpathy Goal-Driven)
 8. **`is_primary_wallet`:** sourced from spine `is_primary`, not from score.
 9. **world_slug scoping:** omitted world_slug → world_nym tier never selected (skips straight
    to discord); present world_slug with no matching nym → also skips.
+10. **Score tier requires a REAL onchain name (operator decision — "real name only"):** score
+    reached, `display_name` present but `beraname`/`ens_name`/`twitter_handle` ALL null (score
+    self-truncated to the wallet) → `display_source="address"`, NOT `"score"`; `degraded=false`.
+    Conversely, ANY one of the three non-null → `display_source="score"` with score's
+    `display_name`. Asserts the facade reads passthrough fields for PRESENCE only.
+11. **score-api response is a keyed map:** the adapter resolves `resp.identities[wallet.toLowerCase()]`;
+    a mixed-case input wallet still finds its score entry; the echoed `results[].wallet` is the
+    normalized (lowercased) form.
 
 ### 7.3 CI integration
 
@@ -640,7 +686,7 @@ scaffolding required (the repo's cycle ledger is empty by design — work is bea
 |----|------|------|--------|------------|
 | **R-1** | Boundary creep — facade starts re-deriving beraname>ENS>twitter or coupling score grouping | Med | High | Hard rule in §1.5; test case §7.2#2 asserts no re-derivation; raw fields are passthrough-only. Flatline gate explicitly checks this. |
 | **R-2** | N×2 spine reads per batch (up to 200 point reads at 100 wallets) | Low | Low | Prod scale tiny (5 users / 3 nyms); all reads index-covered (`0001:62,80,102`); batch capped at 100. Future: batch-resolve engine helper (not v1). |
-| **R-3** | score-api `POST /v1/identity/resolve` wire shape is unconfirmed ([ASSUMPTION] §1.6) | Med | Med | T-A1 MUST verify against `~/Documents/GitHub/score-api/src/routes/` before coding. Fallback: N parallel per-wallet calls behind the same port method (port contract unchanged). |
+| **R-3** | ~~score-api wire shape unconfirmed~~ — **RESOLVED 2026-06-01** | — | — | Grounded against the score-api checkout (§1.6): batched `POST /v1/identity/resolve` exists; response is a keyed map (not array); request is `{ wallets }` only; group-aware; every wallet guaranteed present. No N-call fallback needed. Adapter schema models the map. |
 | **R-4** | `reachable` ships as `"unknown"` for nearly everyone until #11 | High | Low | Intentional + documented (§3.3); contract shape stable now, semantics fill in later. Parallel build is the agreed plan. |
 | **R-5** | Auth posture for the dashboard caller is unconfirmed ([ASSUMPTION] §1.9) | Med | Med | T-A2 confirms; if protected, add `.auth()` only — NEVER touch the verify impl (hard constraint). |
 | **R-6** | `reachable` on-wire encoding (`"true"|"false"|"unknown"` enum vs `boolean|null`) | Low | Low | §5.3 recommends string-enum; Flatline gate confirms before seal (cheap to change pre-deploy, expensive after a consumer vendors it — cf. NOTES "contract-change window OPEN"). |
@@ -652,10 +698,11 @@ scaffolding required (the repo's cycle ledger is empty by design — work is bea
 | ID | Question | Owner | Status |
 |----|----------|-------|--------|
 | **OQ-1** | Per-world nym vs unified cross-world `freeside-nym` | operator (identity-model) | **HELD OPEN** — future identity-model decision. v1 designs ONLY the `world_slug`-scoped path; `world_slug` is optional and scopes the nym tier. (`bd-2wo.38`) |
-| **OQ-2** | score-api `POST /v1/identity/resolve` exact request+response wire shape | T-A1 implementer | Open — resolve by reading the score-api checkout before coding (R-3) |
+| **OQ-2** | ~~score-api wire shape~~ | T-A1 implementer | **RESOLVED 2026-06-01** — keyed map `{ identities: Record<wallet, ResolvedIdentity> }`; request `{ wallets }` only; group-aware; every wallet guaranteed present (§1.6). |
 | **OQ-3** | Dashboard-caller auth posture (open read vs bearer/svc-JWT) | T-A2 implementer | Open — confirm; default to existing sibling-read posture |
 | **OQ-4** | Soft-unlinked discord row → `linked:false` vs `discord:null` | T-B1 (resolver) | Open — policy micro-decision; default `linked:false` keeps the id visible |
-| **OQ-5** | `reachable` wire encoding (string-enum vs boolean-or-null) | Flatline gate | Open — §5.3 recommendation pending review |
+| **OQ-5** | `reachable` wire encoding | operator (pinned) | **RESOLVED** — string-enum `"true"\|"false"\|"unknown"` (operator pin 2026-06-01; contract window open, no external consumers). |
+| **OQ-6** | `score` tier when score reached but no real onchain name | operator | **RESOLVED 2026-06-01** — "real onchain name only": gate the `score` tier on `beraname`/`ens`/`twitter` presence; else fall to `address` (§1.5 ▼). |
 
 ---
 
@@ -694,6 +741,7 @@ scaffolding required (the repo's cycle ledger is empty by design — work is bea
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2026-06-01 | Initial feature-scoped SDD for `POST /v1/identity/resolve` merge facade (G-5 / bd-2wo.38) | Architecture Designer |
+| 1.1 | 2026-06-01 | Pre-build grounding pass (5-agent verification vs the tree + score-api checkout). OQ-2 RESOLVED: score response is a keyed map `{ identities: Record<wallet, ResolvedIdentity> }` (not an array); request is `{ wallets }` only (no `world_slug`); `display_name` is never null → `score` tier gated on a REAL onchain name (OQ-6, operator "real-name-only"); score degrade is per-BATCH; wallet regex is plain hex → lowercase-normalize + dedupe + map lookup. OQ-5 pinned to string-enum. R-3/OQ-2 closed. Facade drops score's `basename`/`pfp_url`/`twitter_source` (not in ratified #32). | Build session (grounding) |
 
 ---
 
