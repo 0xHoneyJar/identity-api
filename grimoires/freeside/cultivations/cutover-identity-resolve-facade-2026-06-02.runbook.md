@@ -6,8 +6,30 @@ cycle_id:     cutover-identity-resolve-facade-2026-06-02
 authored_by:  KRANZ (construct-freeside) via opus-4-8-1m + zksoju
 target:       identity.0xhoneyjar.xyz (Railway, dashboard-managed)
 trigger:      operator "deploy 33"
-STATUS:       NO-GO (gate closed at Act 1 — main diverged; #28 CONFLICTING)
+STATUS:       RECONCILED — #28 UNBLOCKED (MERGEABLE). Prod flip PENDING operator (creds + GO). See UPDATE.
 ```
+
+## UPDATE 2026-06-02 — Reconciled (Layer 2 → GREEN)
+
+Operator chose "reconcile + re-verify." Done:
+- Merged `origin/main` (`#31` world_managers) into the sprint-3 branch (`bafacac`). ONE conflict resolved: `packages/protocol/src/api/index.ts` barrel — unioned the facade's `IdentityResolve*` block + `#31`'s `ManagedWorld` block.
+- `#31` extended `SpinePort` with `getManagedWorlds`; added the `[]`-stub to the three branch-side mocks (identity-resolve route + goal-validation, discord-link).
+- **Re-gate:** Layer 1 + Layer 2 GREEN — full suite **562 pass / 0 fail**, typecheck clean on touched files, **`#28` (parent→main) = MERGEABLE**. Branch now carries facade + `0007` world_managers.
+
+**Layer 3 (operator gate) is what remains.** The prod flip below is yours — I hold (no prod creds; no-latitude on prod auth deploy).
+
+### ⚠️ Expanded migration gap (prod is lagged)
+Prod (`identity.0xhoneyjar.xyz`) serves only the HS256 spine — its deploy predates W2.5 sprint-2. So prod's DB is likely behind by **0003–0007** (cell_api_keys · operator_grants · svc_jwt_issuance · svc_jwt_denylist · world_managers), not just 0007. **Run `migrate:status` against prod first** to see the real gap; `migrate up` applies them in order (all additive). This deploy un-lags the entire ES256 svc-JWT stack + world_managers + the facade in one shot — treat it as a major prod cutover, not a hotfix.
+
+### Operator prod-flip sequence (Layer 3 GO → Flip)
+1. Merge `#28` → `main` (carries the whole W2.5 chain + facade to main).
+2. `migrate:status` against prod `DATABASE_URL` → `migrate up` (applies the 0003–0007 gap). Keep the `.down.sql`s for rollback.
+3. Railway deploys `main` (dashboard auto-deploy or `railway up`).
+4. Smoke: `POST /v1/identity/resolve` + bearer → 200; no token → 401; ES256 `/.well-known/jwks.json` stops 404-ing.
+5. Watch 30 min. Revert on red (`git revert` #28 merge + `migrate down` + Railway redeploy prior).
+
+---
+
 
 ## Act 1 — Coordinate (read the substrate)
 
