@@ -29,6 +29,8 @@ import type {
   SpineLinkedAccountProvider,
   SpinePort,
 } from "@freeside-auth/ports"
+import { LinkWalletOnlyReqSchema } from "@freeside-auth/protocol/api"
+import { zodConverter } from "../../hyper/openapi-zod"
 import app from "../index"
 import { __resetSpineForTest, __setSpineForTest } from "../spine"
 
@@ -280,5 +282,26 @@ describe("POST /v1/link/wallet-only — input validation", () => {
       body: JSON.stringify({ worldSlug: "mibera", walletAddress: "not-an-address" }),
     })
     expect(res.status).toBe(400)
+  })
+})
+
+// ─── OpenAPI converter: array body regression ───────────────────────────────
+//
+// LinkWalletOnlyReqSchema is the first request body to carry a `z.array(...)`.
+// Under Zod v4 the array `_def` exposes BOTH `type` (the discriminator string
+// "array") and `element` (the actual element schema); the converter must read
+// `element` first or it walks the string and crashes on `def.typeName` at app
+// boot (the openapi plugin generates the spec on the OpenAPI route). This pins
+// the fix so a regression fails here, not only at app-boot for every route.
+describe("openapi-zod converter — array request body (regression)", () => {
+  it("converts importedNames array → {type:'array', items:{type:'object'}} without throwing", () => {
+    const json = zodConverter.toJsonSchema(LinkWalletOnlyReqSchema) as {
+      type: string
+      properties: Record<string, { type?: string | string[]; items?: { type?: string } }>
+    }
+    expect(json.type).toBe("object")
+    const imported = json.properties.importedNames
+    expect(imported?.type).toBe("array")
+    expect(imported?.items?.type).toBe("object")
   })
 })

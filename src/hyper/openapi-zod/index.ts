@@ -62,8 +62,13 @@ function toJson(schema: ZodLike): JsonSchema {
     }
     case "ZodArray":
     case "array": {
+      // Zod v4: `_def.type` is the discriminator string ("array"); the element
+      // schema lives at `_def.element`. Zod v3: the element schema was at
+      // `_def.type` and `element` is absent. Prefer `element` so v4's string
+      // discriminator never gets walked as a schema (which crashes on
+      // `def.typeName` of a string), and fall back to `type` for v3.
       const v = def as { type?: ZodLike; element?: ZodLike }
-      const inner = v.type ?? v.element
+      const inner = v.element ?? v.type
       return { type: "array", ...(inner && { items: toJson(inner) }) }
     }
     case "ZodObject":
