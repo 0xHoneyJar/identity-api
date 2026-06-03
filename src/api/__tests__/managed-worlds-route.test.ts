@@ -64,6 +64,9 @@ function buildMockSpine(): MockSpine {
     linkWallet: notImpl("linkWallet") as never,
     linkAccount: notImpl("linkAccount") as never,
     claimNym: notImpl("claimNym") as never,
+    // A2 (#11 Phase 1): SpinePort gained the world-name primitives; unused here.
+    claimGeneratedName: notImpl("claimGeneratedName") as never,
+    importName: notImpl("importName") as never,
     setPrimary: notImpl("setPrimary") as never,
     writeAuditEvent: notImpl("writeAuditEvent") as never,
     mintNonce: notImpl("mintNonce") as never,

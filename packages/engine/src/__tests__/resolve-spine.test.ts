@@ -97,6 +97,14 @@ function buildMockSpine(): MockSpine {
       trace.push({ method: "claimNym", args: opts })
       if (m.claimNymThrows) throw m.claimNymThrows
     },
+    // A2 (#11 Phase 1): SpinePort gained the world-name primitives; stubs.
+    async claimGeneratedName(opts) {
+      trace.push({ method: "claimGeneratedName", args: opts })
+      return "MIBERA-000001"
+    },
+    async importName(opts) {
+      trace.push({ method: "importName", args: opts })
+    },
     async setPrimary(opts) {
       trace.push({ method: "setPrimary", args: opts })
       return m.setPrimaryReturns ?? true
@@ -197,6 +205,7 @@ describe("resolve-spine.ts engine orchestrators (T1.5)", () => {
       wallets: [],
       linked_accounts: [],
       world_identities: [],
+      world_names: [],
     }
     const got = await getIdentity(spine, "u1")
     expect(got?.user_id).toBe("u1")

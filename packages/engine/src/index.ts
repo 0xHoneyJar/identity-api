@@ -79,6 +79,18 @@ export {
   type MergeIdentityInput,
 } from './merge-identity';
 
+// Privacy-default name resolver (A4 · identity-api #11 Phase 1). Pure: projects
+// SpineWorldName[] into a single display-name + source. The generated
+// MIBERA-XXXX handle is the default-display floor; the raw shortened address is
+// an explicit, NEVER-default opt-in (includeOptIn:true). The in-memory twin of
+// the 0008 recompute trigger. Wired into BOTH /v1/profile + /v1/identity/resolve
+// + JWT display claims (A5).
+export {
+  resolveDisplayName,
+  type ResolveDisplayNameOptions,
+  type ResolvedDisplayName,
+} from './resolve-display-name';
+
 // Auth nonce orchestrators (T1.4 · FR-A1 lifecycle: mint + atomic consume +
 // audit pairing). T1.6's /v1/auth/challenge + /v1/auth/verify import from here.
 export {
@@ -146,6 +158,21 @@ export {
   type ConflictDecision,
   type ConflictResolver,
 } from './link-verified-wallet';
+
+// Link-wallet-only orchestrator (A3 · identity-api #11 Phase 1). Admits
+// WALLET-ONLY users (no discord) — the 189 midi users linkVerifiedWallet
+// cannot serve. Mirrors linkVerifiedWallet minus the discord axis; adds the
+// hoisted name step (claim-or-import). NEVER writes provider='discord'.
+export {
+  linkWalletOnly,
+  firstClaimResolver,
+  type LinkWalletOnlyInput,
+  type LinkWalletOnlyResult,
+  type ImportedName,
+  type WalletOnlyConflictState,
+  type WalletOnlyConflictDecision,
+  type WalletOnlyConflictResolver,
+} from './link-wallet-only';
 
 // Link-verified-credential (bd-2wo.14 · Discord-social OAuth-verification
 // front-end). The SESSION-keyed sibling of linkVerifiedWallet — composes the
