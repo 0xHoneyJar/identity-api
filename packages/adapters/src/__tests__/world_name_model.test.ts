@@ -358,6 +358,24 @@ describe.skipIf(!TEST_DATABASE_URL)("0008 world name model (A1)", () => {
       const u1 = await seedWorldAndUser(sql, "mibera")
       const u2 = await seedWorldAndUser(sql, "mibera")
 
+      // Production-representative shape: every wallet-only user carries a
+      // `generated` floor (linkWalletOnly always writes one — imported or
+      // claimGeneratedName). The 0008 design (up.sql:158-161) relies on this
+      // privacy floor so that retiring a claimed_nym recomputes nym to the
+      // generated handle rather than leaving a stale denorm pointer. With the
+      // 0009 upsert trigger, omitting the floor would strand u1's nym at 'duke'
+      // and collide on UNIQUE(world_slug,nym) when u2 reclaims — a state the
+      // real path never produces. Seed the floor so the test exercises the
+      // reachable behavior.
+      await sql`
+        INSERT INTO world_identity_names (user_id, world_slug, name_type, value, priority, is_opt_in)
+        VALUES (${u1}, 'mibera', 'generated', 'MIBERA-U10000', 50, false)
+      `
+      await sql`
+        INSERT INTO world_identity_names (user_id, world_slug, name_type, value, priority, is_opt_in)
+        VALUES (${u2}, 'mibera', 'generated', 'MIBERA-U20000', 50, false)
+      `
+
       await sql`
         INSERT INTO world_identity_names (user_id, world_slug, name_type, value, priority, is_opt_in)
         VALUES (${u1}, 'mibera', 'claimed_nym', 'duke', 10, false)
@@ -375,15 +393,26 @@ describe.skipIf(!TEST_DATABASE_URL)("0008 world name model (A1)", () => {
       }
       expect(raised).toBe(true)
 
-      // Retire u1's 'duke' → u2 may now claim it.
+      // Retire u1's 'duke' → u1's nym recomputes to its generated floor,
+      // releasing 'duke' on world_identity → u2 may now claim it (the 0009
+      // upsert re-points u2's nym to 'duke' with no UNIQUE(world_slug,nym)
+      // collision).
       await sql`
         UPDATE world_identity_names SET retired_at = NOW()
          WHERE user_id = ${u1} AND name_type = 'claimed_nym' AND value = 'duke'
       `
+      const u1Nym = (await sql`
+        SELECT nym FROM world_identity WHERE user_id = ${u1} AND world_slug = 'mibera'
+      `) as Array<{ nym: string }>
+      expect(u1Nym[0]!.nym).toBe("MIBERA-U10000") // fell back to floor, 'duke' released
       await sql`
         INSERT INTO world_identity_names (user_id, world_slug, name_type, value, priority, is_opt_in)
         VALUES (${u2}, 'mibera', 'claimed_nym', 'duke', 10, false)
       `
+      const u2Nym = (await sql`
+        SELECT nym FROM world_identity WHERE user_id = ${u2} AND world_slug = 'mibera'
+      `) as Array<{ nym: string }>
+      expect(u2Nym[0]!.nym).toBe("duke") // reclaimed cleanly via the upsert
       const active = (await sql`
         SELECT COUNT(*)::int AS n FROM world_identity_names
          WHERE world_slug = 'mibera' AND name_type = 'claimed_nym' AND value = 'duke'
@@ -426,6 +455,11 @@ describe.skipIf(!TEST_DATABASE_URL)("0008 world name model (A1)", () => {
   // ── 9. down ──────────────────────────────────────────────────────────────────
 
   it("down: drops trigger + both tables; nym + its UNIQUE(world_slug,nym) untouched", async () => {
+    // 0009 (the upsert-trigger body swap) sits on top of 0008. Revert it first
+    // (restores the 0008 UPDATE-only body — a function-body swap, no schema
+    // change), then revert 0008 itself (the assertion under test).
+    const down9 = await migrate({ databaseUrl, migrationsDir: MIGRATIONS_DIR, verb: "down" })
+    expect(down9).toEqual({ verb: "down", reverted: "0009_world_identity_upsert_trigger" })
     const result = await migrate({ databaseUrl, migrationsDir: MIGRATIONS_DIR, verb: "down" })
     expect(result).toEqual({ verb: "down", reverted: "0008_world_name_model" })
 
@@ -459,9 +493,13 @@ describe.skipIf(!TEST_DATABASE_URL)("0008 world name model (A1)", () => {
 
   // ── 10. up-after-down ────────────────────────────────────────────────────────
 
-  it("up after down: re-applies 0008 cleanly (round-trip)", async () => {
+  it("up after down: re-applies 0008 + 0009 cleanly (round-trip)", async () => {
+    // The prior test reverted both 0009 and 0008; `up` re-applies both in order.
     const result = await migrate({ databaseUrl, migrationsDir: MIGRATIONS_DIR, verb: "up" })
-    expect(result).toEqual({ verb: "up", applied: ["0008_world_name_model"] })
+    expect(result).toEqual({
+      verb: "up",
+      applied: ["0008_world_name_model", "0009_world_identity_upsert_trigger"],
+    })
 
     const sql = new SQL(databaseUrl)
     try {
