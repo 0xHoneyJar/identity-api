@@ -1,8 +1,8 @@
 # Project Notes
 
-## ◐ ACTIVE — bd-u1j / sprint-bug-1: world_identity row-population gap (migration 0009)
+## ✅ DONE — bd-u1j / sprint-bug-1: world_identity row-population gap (migration 0009)
 
-**2026-06-03 — RESUMED `/implement` (prior agent died post-triage, pre-code).** Trigger-only fix: `recompute_world_nym()` UPDATE→upsert (`0009`) + backfill claimed_nym collision retry. Spec `grimoires/loa/specs/fix-world-identity-upsert.md`; sprint `grimoires/loa/a2a/bug-20260602-878a0f/sprint.md`. Branch `fix/wallet-only-world-identity`. Scratch test DB = `identity_ci` (docker idapi-pg).
+**2026-06-03 — COMPLETED (implement→review→audit all green).** Trigger-only fix: `recompute_world_nym()` UPDATE→upsert (`0009`) + backfill claimed_nym collision retry. Engine UNCHANGED. 5 commits on `fix/wallet-only-world-identity` (a4e1ce1..11b2ce0). Tests: T1 6/6, T2 3/3 (real spine), T3 2/2 (real spine), shield world_name_model 10/10 + backfill MockSpine 13/13. CLI up→down→up reversibility verified (UPSERT→UPDATE-only→UPSERT). Review=All good, Audit=APPROVED. **NOT pushed, NO PR** — coordinator opens PR + prod-flips (`migrate up` on prod, which is at 0008). Follow-up bead `bd-axa` (P3): generated-floor invariant hardening (unreachable raw-23505 edge). Spec `grimoires/loa/specs/fix-world-identity-upsert.md`; report `grimoires/loa/a2a/sprint-bug-1/`. Scratch test DB = `identity_ci` (docker idapi-pg).
 
 **SAFETY CHECK RESOLVED (gate before 0009): `linkVerifiedWallet` is NOT broken by 0009.** Grounded:
 - `link-verified-wallet.ts:152-307` — writes ZERO `world_identity_names` rows (only mintUser/linkWallet/linkAccount/audit) → trigger never fires for it.
