@@ -48,7 +48,7 @@ import { me } from "./routes/me"
 import { resolveWallet, resolveAccount, resolveNym, getIdentity } from "./routes/resolve"
 import { getProfile, getMiberaDimensions } from "./routes/profile"
 import { resolveIdentityBatch } from "./routes/identity-resolve"
-import { linkVerifiedWallet } from "./routes/link"
+import { linkVerifiedWallet, linkWalletOnly } from "./routes/link"
 import { discordLinkInitiate, discordLinkCallback } from "./routes/discord-link"
 
 // W2.5 sprint-2 T-2.6 — cell-API-key-authenticated svc-JWT issuance.
@@ -89,6 +89,7 @@ const app = new Hyper()
     getMiberaDimensions,
     resolveIdentityBatch,
     linkVerifiedWallet,
+    linkWalletOnly,
     discordLinkInitiate,
     discordLinkCallback,
 

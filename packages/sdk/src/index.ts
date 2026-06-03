@@ -37,6 +37,7 @@ export type {
   IdentityClient,
   CreateIdentityClientOpts,
   LinkVerifiedWalletOpts,
+  LinkWalletOnlyOpts,
 } from "./client"
 
 // Errors — re-exported at the top level so consumers can use them

@@ -64,6 +64,11 @@ export {
   type LinkVerifiedWalletReq,
   type LinkVerifiedWalletResp,
   type LinkVerifiedWalletConflict,
+  LinkWalletOnlyReqSchema,
+  LinkWalletOnlyRespSchema,
+  ImportedNameSchema,
+  type LinkWalletOnlyReq,
+  type LinkWalletOnlyResp,
 } from "./link"
 
 export {

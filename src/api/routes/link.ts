@@ -20,11 +20,14 @@ import { route } from "../../auth"
 import { getSpine } from "../spine"
 import {
   linkVerifiedWallet as linkVerifiedWalletOrchestrator,
+  linkWalletOnly as linkWalletOnlyOrchestrator,
   LinkCrossUserCollisionError,
 } from "@freeside-auth/engine"
 import {
   LinkVerifiedWalletReqSchema as LinkVerifiedWalletReq,
   type LinkVerifiedWalletReq as LinkVerifiedWalletReqShape,
+  LinkWalletOnlyReqSchema as LinkWalletOnlyReq,
+  type LinkWalletOnlyReq as LinkWalletOnlyReqShape,
 } from "@freeside-auth/protocol/api"
 
 /**
@@ -104,5 +107,60 @@ export const linkVerifiedWallet = route
       }
       throw err // unknown failure → 5xx via global error handler
     }
+  })
+
+/**
+ * POST /v1/link/wallet-only — wallet-only spine ingress (Sprint B part 1).
+ *
+ * The sibling of `linkVerifiedWallet` for users with NO discord. Same
+ * service-to-service auth (`X-Service-Token`), same fail-closed posture.
+ *
+ * Unlike verified-wallet there is NO 409 path: the engine resolver
+ * (`firstClaimResolver`, link-wallet-only.ts:82-97) only produces
+ * `create_user | idempotent_noop` — no discord axis means no cross-user
+ * collision class — so the handler is a straight call with no try-catch.
+ */
+export const linkWalletOnly = route
+  .post("/v1/link/wallet-only")
+  .body(LinkWalletOnlyReq)
+  .meta({
+    summary: "Ingest a wallet-only linkage (no discord) — mints the world name",
+    mcp: {
+      title: "Link wallet-only user",
+      description:
+        "Admits a wallet-only user to the spine and assigns their world name. Mirrors link/verified-wallet MINUS the discord axis. New wallet → create + claim a generated name; known wallet → idempotent no-op. No cross_user_collision on this path.",
+    },
+  })
+  .handle(async (c) => {
+    // Service-to-service auth gate — fail closed if no token is configured
+    // (mirrors verified-wallet; same shared helpers).
+    const configured = getServiceToken()
+    if (configured === null) {
+      return jsonResponse(503, {
+        code: "service_unconfigured",
+        message: "LINK_SERVICE_TOKEN is not set; refusing service-to-service writes",
+      })
+    }
+    const provided = (
+      c as unknown as { req: Request }
+    ).req.headers.get("x-service-token")
+    if (!serviceTokenMatches(provided, configured)) {
+      return jsonResponse(401, {
+        code: "unauthorized",
+        message: "missing or invalid X-Service-Token",
+      })
+    }
+
+    const body = (c as unknown as { body: LinkWalletOnlyReqShape }).body
+    const result = await linkWalletOnlyOrchestrator(getSpine(), body, {
+      actor: "wallet-only-ingress",
+    })
+    return jsonResponse(200, {
+      ok: true,
+      user_id: result.userId,
+      wallet_address: result.walletAddress,
+      idempotent: result.idempotent,
+      generated_name: result.generatedName,
+    })
   })
 
