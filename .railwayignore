@@ -1,0 +1,10 @@
+# Framework + state dirs — not part of the app build. Excludes operator-local
+# construct-pack symlinks (.claude/constructs/**) that break `railway up` indexing.
+.claude/
+grimoires/
+.beads/
+.ck/
+.run/
+.github/
+.git/
+*.log
