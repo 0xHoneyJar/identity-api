@@ -43,6 +43,8 @@ import type {
   IdentityResp,
   LinkVerifiedWalletReq,
   LinkVerifiedWalletResp,
+  LinkWalletOnlyReq,
+  LinkWalletOnlyResp,
   MiberaDimensionsQuery,
   MiberaDimensionsResp,
   ProfileQuery,
@@ -94,6 +96,14 @@ export interface LinkVerifiedWalletOpts {
   readonly serviceTokenHeader?: string
 }
 
+/**
+ * Per-call options for `link.walletOnly`. The wallet-only ingress uses the
+ * SAME S2S `X-Service-Token` auth as `link.verifiedWallet` — distinct from the
+ * end-user JWT. Aliased to the verified-wallet opts so the two S2S surfaces
+ * stay in lockstep.
+ */
+export type LinkWalletOnlyOpts = LinkVerifiedWalletOpts
+
 // ─── the typed client surface ──────────────────────────────────────────────
 
 export interface IdentityClient {
@@ -144,6 +154,13 @@ export interface IdentityClient {
      * end-user-facing JWT). 501 today; T4.1 implements.
      */
     verifiedWallet(input: LinkVerifiedWalletReq, opts: LinkVerifiedWalletOpts): Promise<LinkVerifiedWalletResp>
+    /**
+     * Wallet-only ingress (Sprint B part 1). The sibling of `verifiedWallet`
+     * for users with NO discord — mints the world name. Same S2S service
+     * token. New wallet → 200 with `generated_name` set; known wallet → 200
+     * `idempotent: true`, `generated_name: null`. No 409 on this path.
+     */
+    walletOnly(input: LinkWalletOnlyReq, opts: LinkWalletOnlyOpts): Promise<LinkWalletOnlyResp>
   }
 }
 
@@ -262,6 +279,18 @@ export function createIdentityClient(opts: CreateIdentityClientOpts): IdentityCl
         return transport.request<LinkVerifiedWalletResp>({
           method: "POST",
           path: "/v1/link/verified-wallet",
+          body: input,
+          headers: { [headerName]: callOpts.serviceToken },
+        })
+      },
+      async walletOnly(
+        input: LinkWalletOnlyReq,
+        callOpts: LinkWalletOnlyOpts,
+      ): Promise<LinkWalletOnlyResp> {
+        const headerName = (callOpts.serviceTokenHeader ?? "x-service-token").toLowerCase()
+        return transport.request<LinkWalletOnlyResp>({
+          method: "POST",
+          path: "/v1/link/wallet-only",
           body: input,
           headers: { [headerName]: callOpts.serviceToken },
         })

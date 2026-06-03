@@ -55,6 +55,8 @@ export type {
 export type {
   LinkVerifiedWalletReq,
   LinkVerifiedWalletResp,
+  LinkWalletOnlyReq,
+  LinkWalletOnlyResp,
 } from "@freeside-auth/protocol/api"
 
 // ─── identity-resolve merge facade (G-5, bd-2wo.38) ─────────────────────────
@@ -104,6 +106,8 @@ export {
   MiberaDimensionsRespSchema,
   LinkVerifiedWalletReqSchema,
   LinkVerifiedWalletRespSchema,
+  LinkWalletOnlyReqSchema,
+  LinkWalletOnlyRespSchema,
   // identity-resolve merge facade (G-5) — the sealed shape for the dashboard
   // mock-fallback (bd-2wo.38.3).
   IdentityResolveReqSchema,
