@@ -1,5 +1,15 @@
 # Project Notes
 
+## ✅ DONE — bd-u1j / sprint-bug-1: world_identity row-population gap (migration 0009)
+
+**2026-06-03 — COMPLETED (implement→review→audit all green).** Trigger-only fix: `recompute_world_nym()` UPDATE→upsert (`0009`) + backfill claimed_nym collision retry. Engine UNCHANGED. 5 commits on `fix/wallet-only-world-identity` (a4e1ce1..11b2ce0). Tests: T1 6/6, T2 3/3 (real spine), T3 2/2 (real spine), shield world_name_model 10/10 + backfill MockSpine 13/13. CLI up→down→up reversibility verified (UPSERT→UPDATE-only→UPSERT). Review=All good, Audit=APPROVED. **NOT pushed, NO PR** — coordinator opens PR + prod-flips (`migrate up` on prod, which is at 0008). Follow-up bead `bd-axa` (P3): generated-floor invariant hardening (unreachable raw-23505 edge). Spec `grimoires/loa/specs/fix-world-identity-upsert.md`; report `grimoires/loa/a2a/sprint-bug-1/`. Scratch test DB = `identity_ci` (docker idapi-pg).
+
+**SAFETY CHECK RESOLVED (gate before 0009): `linkVerifiedWallet` is NOT broken by 0009.** Grounded:
+- `link-verified-wallet.ts:152-307` — writes ZERO `world_identity_names` rows (only mintUser/linkWallet/linkAccount/audit) → trigger never fires for it.
+- `claimNym` (`postgres-spine-adapter.ts:592-617`) does a DIRECT `world_identity` INSERT, writes NO name row → never fires the trigger.
+- `claimNymWithAudit` (`resolve-spine.ts:247`) is the only `claimNym` wrapper and has ZERO non-test production call sites.
+- No caller writes a name row AND calls claimNym → the upsert's `ON CONFLICT … DO UPDATE WHERE nym IS DISTINCT` can't create a conflicting/duplicate `world_identity` row. CONFIRMED SAFE.
+
 ## ▶ RESUME HERE (fresh session) — v1 /v1/identity/resolve facade is SHIPPED (PR #33)
 
 **2026-06-02 — `bd-2wo.38` BUILT + audit-APPROVED.** Full Loa cycle ran: `/sprint-plan → /run` (implement→review→audit) → **DRAFT PR [#33](https://github.com/0xHoneyJar/identity-api/pull/33)** (base `w2.5-sprint-3-auth-sdk-source-distributed`, head `w2.5-identity-resolve-facade`). Children `bd-2wo.38.1–.4` closed. Full suite 548 pass / 0 fail. AC-13 (auth byte-unchanged) + AC-14 (no-embed) verified. SDD ground-corrected to v1.1 (score response is a **keyed map** not an array; `{wallets}`-only to score; score tier gated on a real onchain name — OQ-6). Decisions resolved this session: OQ-5 = string-enum (pinned), OQ-6 = score-tier-real-name-only.

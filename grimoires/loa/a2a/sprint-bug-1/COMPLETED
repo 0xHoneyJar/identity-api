@@ -1,0 +1,24 @@
+sprint-bug-1 (bd-u1j): world_identity row-population gap — COMPLETED
+
+Audit verdict: APPROVED - LETS FUCKING GO (auditor-sprint-feedback.md)
+Senior review: All good (with noted concerns) (engineer-feedback.md)
+AC Verification: all 6 ACs ✓ Met (reviewer.md)
+
+Implementation:
+- 0009_world_identity_upsert_trigger.{up,down}.sql — recompute_world_nym() UPDATE→upsert
+- scripts/backfill-wallet-only-from-midi.ts — claimed_nym collision retry + claimedNymDropped
+- Engine source UNCHANGED (link-wallet-only.ts, postgres-spine-adapter.ts: 0 lines)
+
+Tests (scratch DB, all green):
+- T1 world_identity_upsert_trigger.test.ts — 6/6
+- T2 link-wallet-only-trigger.test.ts (real spine) — 3/3
+- T3 backfill-wallet-only-from-midi-collision.test.ts (real spine) — 2/2
+- Regression shield: world_name_model.test.ts 10/10 + backfill MockSpine 13/13
+
+Reversibility: CLI migrate up→down→up verified (UPSERT→UPDATE-only→UPSERT via pg_get_functiondef).
+Safety: linkVerifiedWallet NOT broken (writes no world_identity_names rows; claimNym writes no name row).
+
+Follow-up (non-blocking): bd-axa (P3, domain:shared) — generated-floor invariant hardening.
+
+Branch fix/wallet-only-world-identity — NOT pushed, NO PR (coordinator handles review/PR/deploy).
+Completed: 2026-06-03

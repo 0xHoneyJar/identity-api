@@ -337,3 +337,82 @@ describe("mergeIdentity — A5 privacy-default registry tier", () => {
     expect(e.display_name).toBe(WALLET)
   })
 })
+
+// ─── bd-3xj: registry-first precedence (0009 two-endpoint agreement) ──────────
+//
+// Migration 0009 now ALWAYS populates `world_identity.nym` (the denorm) for any
+// user with a registry name. The denorm is just the registry's cache — so the
+// registry (resolveDisplayName, the SoT that composeProfile/`/v1/profile` uses)
+// MUST drive the display, NOT the denorm. mergeIdentity therefore checks the
+// REGISTRY tier FIRST and falls back to the `world_nym` denorm only when the
+// user has a populated nym but NO registry rows (the 3 original discord users,
+// pre-name-model). This restores the "one resolver, both endpoints agree"
+// invariant the 0009 trigger broke.
+
+describe("mergeIdentity — registry-first precedence (bd-3xj, 0009 regression)", () => {
+  it("(a) registry rows present AND world_identity nym present → REGISTRY source, NOT world_nym (the regression)", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        // The 0009 trigger denorm — populated for every registry user post-0009.
+        world_identities: [{ world_slug: "mibera", nym: "MIBERA-ABCDEF", joined_at: "x" }],
+        // The registry rows (SoT) — the same value, but the SOURCE must be the
+        // registry's, matching composeProfile.
+        world_names: [worldName({ name_type: "generated", value: "MIBERA-ABCDEF", priority: 50 })],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    // Pre-fix this returned "world_nym"; registry-first returns the registry source.
+    expect(e.display_source).toBe("generated")
+    expect(e.display_source).not.toBe("world_nym")
+    expect(e.display_name).toBe("MIBERA-ABCDEF")
+  })
+
+  it("(b) world_identity nym present but NO registry rows → world_nym fallback (the 3 original discord users)", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        world_identities: [{ world_slug: "mibera", nym: "honeybadger", joined_at: "x" }],
+        world_names: [], // no registry rows — pre-name-model user
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    expect(e.display_source).toBe("world_nym")
+    expect(e.display_name).toBe("honeybadger")
+  })
+
+  it("(c) privacy floor: a registry name + nym never yields 'address'", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        world_identities: [{ world_slug: "mibera", nym: "MIBERA-AAAAAA", joined_at: "x" }],
+        world_names: [worldName({ name_type: "generated", value: "MIBERA-AAAAAA", priority: 50 })],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    expect(e.display_source).not.toBe("address")
+    expect(e.display_name).not.toBe(WALLET)
+  })
+
+  it("(d) registry claimed_nym preferred over the world_nym denorm; registry VALUE drives display_name", () => {
+    const e = mergeIdentity({
+      wallet: WALLET,
+      spine: spine({
+        // Denorm holds a STALE value; the registry is authoritative.
+        world_identities: [{ world_slug: "mibera", nym: "MIBERA-STALE0", joined_at: "x" }],
+        world_names: [worldName({ name_type: "claimed_nym", value: "satoshi", priority: 10 })],
+      }),
+      enrich: undefined,
+      worldSlug: "mibera",
+      degraded: false,
+    })
+    expect(e.display_source).toBe("claimed_nym")
+    expect(e.display_name).toBe("satoshi") // registry value, NOT the denorm "MIBERA-STALE0"
+  })
+})
