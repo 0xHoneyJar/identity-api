@@ -67,8 +67,16 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/identity_ci
         run: |
-          bun test \
+          # Each file drops+remigrates, so run them in SEPARATE invocations for
+          # bulletproof isolation (no cross-file shared-DB interference).
+          for f in \
             packages/adapters/src/__tests__/world_name_model.test.ts \
             packages/adapters/src/__tests__/postgres-spine-adapter-names.test.ts \
+            packages/adapters/src/__tests__/world_identity_upsert_trigger.test.ts \
+            packages/engine/src/__tests__/link-wallet-only-trigger.test.ts \
             scripts/__tests__/backfill-wallet-only-from-midi-revert.test.ts \
-            src/api/__tests__/wallet-only-e2e-goal-validation.test.ts
+            scripts/__tests__/backfill-wallet-only-from-midi-collision.test.ts \
+            src/api/__tests__/wallet-only-e2e-goal-validation.test.ts ; do
+            echo "=== running $f ==="
+            bun test "$f" || exit 1
+          done
