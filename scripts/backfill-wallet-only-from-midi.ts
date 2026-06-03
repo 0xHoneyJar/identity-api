@@ -45,7 +45,7 @@
  */
 
 import { SQL } from "bun"
-import { PostgresSpineAdapter } from "@freeside-auth/adapters"
+import { PostgresSpineAdapter, SpineConflictError } from "@freeside-auth/adapters"
 import { linkWalletOnly } from "@freeside-auth/engine"
 import type { ImportedName } from "@freeside-auth/engine"
 
@@ -62,6 +62,15 @@ export interface WalletOnlyBackfillStats {
   idempotent: number
   skipped: number
   errors: number
+  /**
+   * Users created generated-only after their absorbed `claimed_nym` collided
+   * with an already-active value in the world (duplicate honey-road
+   * display_name, e.g. two users named "rug"). The losing user keeps their
+   * unique generated MIBERA-XXXX and DROPS the colliding claimed_nym — a
+   * permanent, surfaced degradation (the operator can re-assign a unique nym
+   * later if desired).
+   */
+  claimedNymDropped: number
 }
 
 interface RunOpts {
@@ -135,6 +144,7 @@ export async function backfillWalletOnlyRows(
     idempotent: 0,
     skipped: 0,
     errors: 0,
+    claimedNymDropped: 0,
   }
 
   let i = 0
@@ -177,8 +187,48 @@ export async function backfillWalletOnlyRows(
       if (result.idempotent) stats.idempotent += 1
       else stats.created += 1
     } catch (err) {
-      stats.errors += 1
-      log(`[error ${i}/${rows.length}] wallet=${row.wallet_address}: ${String(err)}`)
+      // A duplicate honey-road display_name absorbed as a `claimed_nym` collides
+      // with an already-active value in the world (e.g. two users named "rug").
+      // The spine raises SpineConflictError(kind='world_identity') with
+      // context.name_type='claimed_nym'. Rather than drop the whole user, RETRY
+      // generated-only: the user keeps their unique mibera_id (priority 50 wins,
+      // no claimed_nym row) and the 0009 trigger populates world_identity.nym =
+      // MIBERA-XXXX. Any OTHER conflict (e.g. a generated-value collision) is a
+      // real error — no silent swallow.
+      if (
+        err instanceof SpineConflictError &&
+        err.kind === "world_identity" &&
+        err.context?.name_type === "claimed_nym"
+      ) {
+        try {
+          const retry = await linkWalletOnly(
+            spine,
+            {
+              worldSlug: opts.worldSlug,
+              walletAddress: row.wallet_address,
+              ...(row.dynamic_user_id ? { dynamicUserId: row.dynamic_user_id } : {}),
+              importedNames: [{ nameType: "generated", value: row.mibera_id }],
+            },
+            { actor: "backfill-wallet" },
+          )
+          if (retry.idempotent) stats.idempotent += 1
+          else stats.created += 1
+          stats.claimedNymDropped += 1
+          log(
+            `[claimed_nym-dropped ${i}/${rows.length}] wallet=${row.wallet_address}: ` +
+              `display_name "${row.display_name}" already claimed in '${opts.worldSlug}'; ` +
+              `created generated-only as ${row.mibera_id}`,
+          )
+        } catch (retryErr) {
+          stats.errors += 1
+          log(
+            `[error ${i}/${rows.length}] wallet=${row.wallet_address} (retry after claimed_nym drop): ${String(retryErr)}`,
+          )
+        }
+      } else {
+        stats.errors += 1
+        log(`[error ${i}/${rows.length}] wallet=${row.wallet_address}: ${String(err)}`)
+      }
     }
 
     if (i % 50 === 0) log(`[progress] ${i}/${rows.length} rows processed`)
