@@ -60,3 +60,50 @@ export const LinkVerifiedWalletConflictSchema = z.object({
   message: z.string(),
 })
 export type LinkVerifiedWalletConflict = z.infer<typeof LinkVerifiedWalletConflictSchema>
+
+// ─── POST /v1/link/wallet-only — wallet-only ingress (Sprint B part 1) ──────
+//
+// The sibling of verified-wallet for users with NO discord. Same S2S
+// `X-Service-Token` auth; same service-side resolve. MINUS the discord axis
+// and MINUS the 409 path: the engine resolver (`firstClaimResolver`,
+// `link-wallet-only.ts:82-97`) only produces `create_user | idempotent_noop`,
+// so there is no cross-user collision class here — no conflict schema.
+//
+// Field names mirror `LinkWalletOnlyInput` / `ImportedName`
+// (`packages/engine/src/link-wallet-only.ts:54-70`) EXACTLY.
+
+/** One externally-minted name to absorb (the backfill's honey-road values). */
+export const ImportedNameSchema = z.object({
+  nameType: z.string(),
+  value: z.string(),
+})
+
+export const LinkWalletOnlyReqSchema = z.object({
+  worldSlug: z.string().regex(/^[a-z0-9-]+$/),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  /** Optional Dynamic-SDK user id; linked as provider='dynamic_user_id'. */
+  dynamicUserId: z.string().min(1).optional(),
+  /**
+   * Externally-minted names to ABSORB (backfill). When present the engine
+   * imports each VERBATIM and does NOT mint a generated handle.
+   */
+  importedNames: z.array(ImportedNameSchema).optional(),
+})
+export type LinkWalletOnlyReq = z.infer<typeof LinkWalletOnlyReqSchema>
+
+/**
+ * 200 OK response — the successful wallet-only link outcome.
+ *
+ * `idempotent` is true when the wallet was already known (no-op). On a fresh
+ * claim `generated_name` carries the minted MIBERA-XXXX (or the absorbed
+ * `generated` import); it is null on the idempotent no-op
+ * (`LinkWalletOnlyResult`, `link-wallet-only.ts:100-112`).
+ */
+export const LinkWalletOnlyRespSchema = z.object({
+  ok: z.literal(true),
+  user_id: z.string().uuid(),
+  wallet_address: z.string(),
+  idempotent: z.boolean(),
+  generated_name: z.string().nullable(),
+})
+export type LinkWalletOnlyResp = z.infer<typeof LinkWalletOnlyRespSchema>
