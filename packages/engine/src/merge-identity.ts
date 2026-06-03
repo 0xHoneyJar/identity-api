@@ -5,7 +5,18 @@
  * Joins the local spine identity (SoR) with score-api's group-aware onchain
  * enrichment and applies the display-name priority ONCE, server-side:
  *
- *   world_nym > discord(id-only) > score display_name > address
+ *   registry > world_nym(denorm) > discord(id-only) > score display_name > address
+ *
+ * The REGISTRY tier (`resolveDisplayName` over spine.world_names) leads: it is
+ * the SAME source-of-truth `composeProfile`/`/v1/profile` uses, so both
+ * endpoints project the IDENTICAL display (the "one resolver" invariant). The
+ * `world_nym` denorm (migration 0008/0009 recompute cache) is now just the
+ * registry's cache, so it serves ONLY as a fallback for users with a populated
+ * nym but NO registry rows (the original discord users, pre-name-model). Before
+ * bd-3xj the denorm led; migration 0009 began populating `world_identity.nym`
+ * for every registry user, which made `mergeIdentity` report `display_source=
+ * "world_nym"` while `/v1/profile` reported the registry source — the two
+ * endpoints disagreed. Registry-first restores agreement.
  *
  * The `score` tier fires ONLY when score resolved a REAL onchain name
  * (`beraname | ens_name | twitter_handle` non-null). score-api's `display_name`
@@ -75,7 +86,19 @@ export function mergeIdentity(input: MergeIdentityInput): IdentityResolveEntry {
 
   let display_name: string
   let display_source: IdentityResolveEntry["display_source"]
-  if (worldNym !== undefined) {
+  if (registryName !== null) {
+    // SoT FIRST — the privacy-default registry name (generated handle or claimed
+    // nym), resolved from spine.world_names via the SAME resolveDisplayName that
+    // composeProfile/`/v1/profile` uses. Leading with it keeps BOTH endpoints in
+    // agreement (bd-3xj). resolveDisplayName already guaranteed the value is
+    // non-opt-in (the privacy floor), so the raw address can never surface here.
+    display_name = registryName.value
+    display_source = registryName.display_source
+  } else if (worldNym !== undefined) {
+    // Legacy fallback — the `world_identity.nym` denorm WITHOUT registry rows
+    // (the original discord users, pre-name-model). Post-backfill every registry
+    // user also has a registry row, so this fires only for the pre-name-model
+    // tail whose nym is not yet mirrored in world_names.
     display_name = worldNym
     display_source = "world_nym"
   } else if (activeDiscord !== undefined) {
@@ -88,13 +111,6 @@ export function mergeIdentity(input: MergeIdentityInput): IdentityResolveEntry {
     // score resolved a REAL onchain name → consume its display_name as ONE tier.
     display_name = enrich.display_name
     display_source = "score"
-  } else if (registryName !== null) {
-    // The privacy-default registry name (generated handle or claimed nym). This
-    // REPLACES the unconditional raw-address fallback: a user with a registry
-    // name NEVER shows the raw address. resolveDisplayName already guaranteed
-    // the value is non-opt-in (the privacy floor).
-    display_name = registryName.value
-    display_source = registryName.display_source
   } else {
     // Legacy fallback — ONLY for users with no registry name in this world
     // (pre-backfill, or a non-registry world). Once the backfill runs, every
