@@ -148,7 +148,9 @@ export interface LinkWalletOnlyResult {
    * name (TRUE no-op), it echoes that existing `generated` handle (re-read via
    * getIdentity). Null only when the user holds world names but none of type
    * `generated` (an absorb whose importedNames carried no `generated` row, or a
-   * world-name set without a generated handle).
+   * world-name set without a generated handle), or when the user is a LEGACY
+   * pre-name-model identity (world_identity row via claimNym, zero registry
+   * rows — a true no-op that must not clobber the legacy nym).
    */
   readonly generatedName: string | null
 }
@@ -236,10 +238,20 @@ export async function linkWalletOnly(
         const existing = await txnSpine.getIdentity(userId)
         const worldNames =
           existing?.world_names.filter((n) => n.world_slug === input.worldSlug) ?? []
-        if (worldNames.length > 0) {
+        // Legacy guard (#40 review): a pre-name-model user can hold a
+        // world_identity row (claimNym writes it directly, FR-R6) with ZERO
+        // registry name rows. Claiming here would fire the 0009 recompute and
+        // silently OVERWRITE their legacy nym with a generated handle — so a
+        // legacy row counts as "world identity exists" and stays a TRUE no-op.
+        const hasLegacyIdentity =
+          existing?.world_identities.some((w) => w.world_slug === input.worldSlug) ??
+          false
+        if (worldNames.length > 0 || hasLegacyIdentity) {
           // World identity already exists → TRUE no-op. Echo the existing
           // generated handle (re-read), so the caller always gets the user's
-          // handle; midi can drop its local MIBERA-XXXX fallback.
+          // handle; midi can drop its local MIBERA-XXXX fallback. A LEGACY-ONLY
+          // user (world_identity row, no registry rows) has no generated-type
+          // name to echo → null; their display stays the legacy nym.
           generatedName =
             worldNames.find((n) => n.name_type === "generated")?.value ?? null
         } else {

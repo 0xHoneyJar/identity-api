@@ -44,6 +44,7 @@ interface MockSpine extends SpinePort {
 function identityWith(
   userId: string,
   names: Array<{ worldSlug: string; nameType: string; value: string }>,
+  worldIdentities: Array<{ worldSlug: string; nym: string }> = [],
 ): SpineIdentityShape {
   const worldNames: SpineWorldName[] = names.map((n, i) => ({
     world_slug: n.worldSlug,
@@ -61,7 +62,11 @@ function identityWith(
     updated_at: "2026-06-01T00:00:00.000Z",
     wallets: [],
     linked_accounts: [],
-    world_identities: [],
+    world_identities: worldIdentities.map((w) => ({
+      world_slug: w.worldSlug,
+      nym: w.nym,
+      joined_at: "2026-06-01T00:00:00.000Z",
+    })),
     world_names: worldNames,
   }
 }
@@ -308,6 +313,40 @@ describe("linkWalletOnly engine orchestrator (A3)", () => {
     ])
     const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
     expect(result.generatedName).toBe("MIBERA-ABCDEF") // claimed for mibera
+    expect(spine.trace.map((t) => t.method)).toContain("claimGeneratedName")
+  })
+
+  it("LEGACY identity (world_identity row, zero registry rows) → TRUE no-op, nym NOT clobbered", async () => {
+    // Pre-name-model user: claimNym wrote world_identity directly (FR-R6),
+    // no world_identity_names rows exist. Claiming here would fire the 0009
+    // recompute and overwrite the legacy nym — must be a true no-op instead.
+    spine.resolveByWalletReturns = "legacy-user-id"
+    spine.getIdentityReturns = identityWith(
+      "legacy-user-id",
+      [], // zero registry name rows
+      [{ worldSlug: "mibera", nym: "Haze" }], // legacy world_identity row
+    )
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.ok).toBe(true)
+    expect(result.idempotent).toBe(true)
+    expect(result.generatedName).toBeNull() // no generated-type row to echo; display stays "Haze"
+    const methods = spine.trace.map((t) => t.method)
+    expect(methods).not.toContain("claimGeneratedName") // the clobber that must not happen
+    expect(methods).not.toContain("importName")
+    // Audit reflects a true no-op: no generated_name key.
+    const umbrella = spine.audits.find((a) => a.event_type === "link_wallet_only")
+    expect("generated_name" in umbrella!.payload).toBe(false)
+  })
+
+  it("LEGACY identity in a DIFFERENT world does not block the claim for the requested world", async () => {
+    spine.resolveByWalletReturns = "legacy-user-id"
+    spine.getIdentityReturns = identityWith(
+      "legacy-user-id",
+      [],
+      [{ worldSlug: "other-world", nym: "Haze" }], // legacy row elsewhere only
+    )
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.generatedName).toBe("MIBERA-ABCDEF") // claims-if-missing still runs
     expect(spine.trace.map((t) => t.method)).toContain("claimGeneratedName")
   })
 
