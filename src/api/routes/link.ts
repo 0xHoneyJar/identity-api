@@ -128,7 +128,7 @@ export const linkWalletOnly = route
     mcp: {
       title: "Link wallet-only user",
       description:
-        "Admits a wallet-only user to the spine and assigns their world name. Mirrors link/verified-wallet MINUS the discord axis. New wallet → create + claim a generated name; known wallet → idempotent no-op. No cross_user_collision on this path.",
+        "Admits a wallet-only user to the spine and assigns their world name. Mirrors link/verified-wallet MINUS the discord axis. New wallet → create + claim a generated name; known wallet → claims-if-missing (claim the world name if absent, else echo the existing handle) with no new user. No cross_user_collision on this path.",
     },
   })
   .handle(async (c) => {

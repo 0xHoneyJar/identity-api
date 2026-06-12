@@ -94,10 +94,12 @@ export type LinkWalletOnlyReq = z.infer<typeof LinkWalletOnlyReqSchema>
 /**
  * 200 OK response — the successful wallet-only link outcome.
  *
- * `idempotent` is true when the wallet was already known (no-op). On a fresh
- * claim `generated_name` carries the minted MIBERA-XXXX (or the absorbed
- * `generated` import); it is null on the idempotent no-op
- * (`LinkWalletOnlyResult`, `link-wallet-only.ts:100-112`).
+ * `idempotent` is true when the wallet was already known (no new user minted).
+ * `generated_name` carries the user's handle: the minted MIBERA-XXXX, the
+ * absorbed `generated` import, or — for a known wallet that already holds a
+ * world name — the existing handle (claims-if-missing, #39). It is null only
+ * when the user holds world names but none of type `generated`
+ * (`LinkWalletOnlyResult`, `link-wallet-only.ts`).
  */
 export const LinkWalletOnlyRespSchema = z.object({
   ok: z.literal(true),

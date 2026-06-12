@@ -158,7 +158,10 @@ export interface IdentityClient {
      * Wallet-only ingress (Sprint B part 1). The sibling of `verifiedWallet`
      * for users with NO discord — mints the world name. Same S2S service
      * token. New wallet → 200 with `generated_name` set; known wallet → 200
-     * `idempotent: true`, `generated_name: null`. No 409 on this path.
+     * `idempotent: true` with `generated_name` = the user's existing handle,
+     * or a freshly-claimed handle when the user had no world name yet
+     * (claims-if-missing, #39); null only when the user holds world names but
+     * none of type `generated`. No 409 on this path.
      */
     walletOnly(input: LinkWalletOnlyReq, opts: LinkWalletOnlyOpts): Promise<LinkWalletOnlyResp>
   }

@@ -13,8 +13,11 @@
  *   - New wallet (resolveByWallet null, no importedNames) → 200, mintUser +
  *     linkWallet + claimGeneratedName; generated_name = "MIBERA-000001",
  *     idempotent = false.
- *   - Known wallet (resolveByWallet hit) → 200 idempotent no-op; generated_name
- *     = null, idempotent = true, NO writes.
+ *   - Known wallet (resolveByWallet hit), claims-if-missing (#39):
+ *       · world identity EXISTS → 200 true no-op; generated_name = existing
+ *         handle, idempotent = true, NO writes.
+ *       · NO world identity → 200; claims the missing handle (claimGeneratedName),
+ *         generated_name = "MIBERA-000001", idempotent = true.
  *   - Audit: umbrella `link_wallet_only` event emitted with NO `discord_id`
  *     key in its payload (`link-wallet-only.ts:197-208`).
  *
@@ -47,6 +50,36 @@ interface MockSpine extends SpinePort {
   resolveByWalletReturns?: string | null
   resolveByAccountByProvider?: Partial<Record<SpineLinkedAccountProvider, string | null>>
   mintUserReturns?: string
+  /** Claims-if-missing (#39): what getIdentity returns on the known-wallet path. */
+  getIdentityReturns?: SpineIdentityShape | null
+}
+
+/** Build a SpineIdentityShape carrying a single generated world name (#39). */
+function identityWithGenerated(
+  userId: string,
+  worldSlug: string,
+  value: string,
+): SpineIdentityShape {
+  return {
+    user_id: userId,
+    primary_wallet: null,
+    created_at: "2026-06-01T00:00:00.000Z",
+    updated_at: "2026-06-01T00:00:00.000Z",
+    wallets: [],
+    linked_accounts: [],
+    world_identities: [],
+    world_names: [
+      {
+        world_slug: worldSlug,
+        name_type: "generated",
+        value,
+        priority: 50,
+        is_opt_in: false,
+        assigned_at: "2026-06-01T00:00:00.000Z",
+        retired_at: null,
+      },
+    ],
+  }
 }
 
 function buildMockSpine(): MockSpine {
@@ -66,7 +99,7 @@ function buildMockSpine(): MockSpine {
       return null
     },
     async getIdentity(): Promise<SpineIdentityShape | null> {
-      return null
+      return m.getIdentityReturns ?? null
     },
     // C-2 (bead arrakis-491i): SpinePort gained getManagedWorlds; stub.
     async getManagedWorlds() {
@@ -150,6 +183,7 @@ beforeEach(() => {
   mockSpine.resolveByWalletReturns = undefined
   mockSpine.resolveByAccountByProvider = undefined
   mockSpine.mintUserReturns = undefined
+  mockSpine.getIdentityReturns = undefined
   process.env.LINK_SERVICE_TOKEN = SERVICE_TOKEN
 })
 
@@ -235,20 +269,40 @@ describe("POST /v1/link/wallet-only — new wallet → create + claimGeneratedNa
   })
 })
 
-// ─── idempotent path: known wallet → no-op ───────────────────────────────────
+// ─── known wallet → claims-if-missing (#39) ──────────────────────────────────
 
-describe("POST /v1/link/wallet-only — known wallet → idempotent no-op", () => {
-  it("returns 200 idempotent true, generated_name null, NO writes", async () => {
+describe("POST /v1/link/wallet-only — known wallet, world identity EXISTS → true no-op", () => {
+  it("returns 200 idempotent true, generated_name = existing handle, NO writes", async () => {
     mockSpine.resolveByWalletReturns = USER_A // known wallet → idempotent_noop
+    mockSpine.getIdentityReturns = identityWithGenerated(USER_A, "mibera", "MIBERA-EXISTS")
     const { status, body } = await postWalletOnly({})
     expect(status).toBe(200)
     const ok = body as WalletOnlySuccessBody
     expect(ok.ok).toBe(true)
     expect(ok.user_id).toBe(USER_A)
     expect(ok.idempotent).toBe(true)
-    expect(ok.generated_name).toBeNull()
-    // NO mintUser / linkWallet / claimGeneratedName fired.
+    // #39: echoes the user's EXISTING handle (no longer null), so midi drops
+    // its local MIBERA-XXXX fallback.
+    expect(ok.generated_name).toBe("MIBERA-EXISTS")
+    // NO mintUser / linkWallet / claimGeneratedName / importName fired.
     expect(mockSpine.linkCalls).toEqual([])
+  })
+})
+
+describe("POST /v1/link/wallet-only — known wallet, NO world identity → claims a generated name", () => {
+  it("returns 200 idempotent true, claims the missing handle (#39)", async () => {
+    mockSpine.resolveByWalletReturns = USER_A // SIWE pre-minted the user
+    mockSpine.getIdentityReturns = null // but no world name yet → claims-if-missing
+    const { status, body } = await postWalletOnly({})
+    expect(status).toBe(200)
+    const ok = body as WalletOnlySuccessBody
+    expect(ok.ok).toBe(true)
+    expect(ok.user_id).toBe(USER_A)
+    expect(ok.idempotent).toBe(true) // no new user minted
+    expect(ok.generated_name).toBe("MIBERA-000001") // freshly claimed
+    // Only claimGeneratedName fired — no mintUser / linkWallet (wallet known).
+    const methods = mockSpine.linkCalls.map((c) => c.method)
+    expect(methods).toEqual(["claimGeneratedName"])
   })
 })
 

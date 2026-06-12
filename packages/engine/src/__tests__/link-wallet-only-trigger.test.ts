@@ -198,4 +198,35 @@ describe.skipIf(!TEST_DATABASE_URL)("linkWalletOnly + 0009 trigger (T2, real spi
       await sql.close()
     }
   })
+
+  // ── B4: claims-if-missing (#39) — known wallet, NO world name → claims ────────
+
+  it("B4: known wallet (SIWE pre-minted) with NO world name → claims-if-missing mints a generated handle", async () => {
+    // Simulate the post-SIWE reality: /v1/auth/verify already minted the user
+    // and linked the wallet, but no world name was ever assigned. The wallet is
+    // KNOWN, so linkWalletOnly takes the idempotent_noop branch — which, per
+    // #39, now claims the missing handle instead of a pure no-op.
+    const userId = await spine.mintUser()
+    await spine.linkWallet({ userId, walletAddress: ADDR_1, isPrimary: true })
+
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: ADDR_1 })
+    expect(result.userId).toBe(userId) // same user — no duplicate mint
+    expect(result.idempotent).toBe(true) // known wallet
+    expect(result.generatedName).toMatch(/^MIBERA-[A-F0-9]{6}$/) // freshly claimed
+
+    const sql = new SQL(databaseUrl)
+    try {
+      // The claimed handle populated world_identity.nym (via the 0009 upsert).
+      expect(await selectNym(sql, userId, "mibera")).toBe(result.generatedName)
+      // Exactly one active generated name row — not a duplicate.
+      const count = (await sql`
+        SELECT COUNT(*)::int AS n FROM world_identity_names
+         WHERE user_id = ${userId} AND world_slug = 'mibera'
+           AND name_type = 'generated' AND retired_at IS NULL
+      `) as Array<{ n: number }>
+      expect(count[0]!.n).toBe(1)
+    } finally {
+      await sql.close()
+    }
+  })
 })
