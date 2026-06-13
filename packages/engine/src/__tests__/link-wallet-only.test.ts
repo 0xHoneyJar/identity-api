@@ -22,8 +22,10 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import type {
   SpineAuditEvent,
+  SpineIdentityShape,
   SpineLinkedAccountProvider,
   SpinePort,
+  SpineWorldName,
 } from "@freeside-auth/ports"
 
 import { linkWalletOnly, type WalletOnlyConflictResolver } from "../link-wallet-only"
@@ -33,7 +35,40 @@ interface MockSpine extends SpinePort {
   audits: SpineAuditEvent[]
   resolveByWalletReturns?: string | null
   mintUserReturns?: string
+  /** Claims-if-missing (#39): what getIdentity returns on the known path. */
+  getIdentityReturns?: SpineIdentityShape | null
   failOn?: string // method name that throws mid-transaction
+}
+
+/** Build a SpineIdentityShape carrying the given world names (for #39 reads). */
+function identityWith(
+  userId: string,
+  names: Array<{ worldSlug: string; nameType: string; value: string }>,
+  worldIdentities: Array<{ worldSlug: string; nym: string }> = [],
+): SpineIdentityShape {
+  const worldNames: SpineWorldName[] = names.map((n, i) => ({
+    world_slug: n.worldSlug,
+    name_type: n.nameType,
+    value: n.value,
+    priority: 10 * (i + 1),
+    is_opt_in: false,
+    assigned_at: "2026-06-01T00:00:00.000Z",
+    retired_at: null,
+  }))
+  return {
+    user_id: userId,
+    primary_wallet: null,
+    created_at: "2026-06-01T00:00:00.000Z",
+    updated_at: "2026-06-01T00:00:00.000Z",
+    wallets: [],
+    linked_accounts: [],
+    world_identities: worldIdentities.map((w) => ({
+      world_slug: w.worldSlug,
+      nym: w.nym,
+      joined_at: "2026-06-01T00:00:00.000Z",
+    })),
+    world_names: worldNames,
+  }
 }
 
 function buildMockSpine(): MockSpine {
@@ -56,8 +91,9 @@ function buildMockSpine(): MockSpine {
     async resolveByNym() {
       return null
     },
-    async getIdentity() {
-      return null
+    async getIdentity(userId) {
+      trace.push({ method: "getIdentity", args: { userId } })
+      return m.getIdentityReturns ?? null
     },
     async getManagedWorlds() {
       return []
@@ -190,17 +226,128 @@ describe("linkWalletOnly engine orchestrator (A3)", () => {
     expect(providers(spine)).toEqual([])
   })
 
-  // ── idempotency ───────────────────────────────────────────────────────────────
+  // ── known wallet, claims-if-missing (#39) ─────────────────────────────────────
 
-  it("is idempotent: an already-linked wallet returns idempotent:true with no new user", async () => {
+  it("known wallet + world identity EXISTS → TRUE no-op: no claim, no import, echoes existing handle", async () => {
     spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = identityWith("existing-user-id", [
+      { worldSlug: "mibera", nameType: "generated", value: "MIBERA-EEEEEE" },
+    ])
     const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
     expect(result.ok).toBe(true)
     expect(result.idempotent).toBe(true)
     expect(result.userId).toBe("existing-user-id")
+    // Echoes the user's EXISTING generated handle (per #39, never null on a no-op
+    // when a generated name is present) — midi can drop its local fallback.
+    expect(result.generatedName).toBe("MIBERA-EEEEEE")
     const methods = spine.trace.map((t) => t.method)
     expect(methods).not.toContain("mintUser") // no duplicate user
     expect(methods).not.toContain("linkWallet") // wallet already linked
+    expect(methods).not.toContain("claimGeneratedName") // name already exists
+    expect(methods).not.toContain("importName")
+  })
+
+  it("known wallet + NO world identity + no importedNames → claimGeneratedName runs, handle returned", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = null // SIWE pre-minted the user but no world name yet
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.ok).toBe(true)
+    expect(result.idempotent).toBe(true) // no new user minted
+    expect(result.userId).toBe("existing-user-id")
+    expect(result.generatedName).toBe("MIBERA-ABCDEF") // freshly claimed
+    const methods = spine.trace.map((t) => t.method)
+    expect(methods).not.toContain("mintUser") // wallet/user already known
+    expect(methods).not.toContain("linkWallet")
+    expect(methods).toContain("claimGeneratedName") // the missing handle is now claimed
+    expect(methods).not.toContain("importName")
+  })
+
+  it("known wallet + NO world identity + importedNames → ABSORBS via importName (no claimGeneratedName)", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = null
+    const result = await linkWalletOnly(spine, {
+      worldSlug: "mibera",
+      walletAddress: WALLET,
+      importedNames: [
+        { nameType: "generated", value: "MIBERA-654321" },
+        { nameType: "claimed_nym", value: "honeybear" },
+      ],
+    })
+    expect(result.ok).toBe(true)
+    expect(result.idempotent).toBe(true)
+    const methods = spine.trace.map((t) => t.method)
+    expect(methods).not.toContain("mintUser")
+    expect(methods).not.toContain("claimGeneratedName") // absorbed, not regenerated
+    const imports = spine.trace.filter((t) => t.method === "importName")
+    expect(imports.length).toBe(2)
+    expect(imports.map((t) => (t.args as { value: string }).value)).toEqual([
+      "MIBERA-654321",
+      "honeybear",
+    ])
+    // Echoes the absorbed `generated` value.
+    expect(result.generatedName).toBe("MIBERA-654321")
+  })
+
+  it("known wallet + world identity exists ignores importedNames (TRUE no-op, no re-import)", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = identityWith("existing-user-id", [
+      { worldSlug: "mibera", nameType: "generated", value: "MIBERA-EEEEEE" },
+    ])
+    const result = await linkWalletOnly(spine, {
+      worldSlug: "mibera",
+      walletAddress: WALLET,
+      importedNames: [{ nameType: "generated", value: "MIBERA-654321" }],
+    })
+    expect(result.idempotent).toBe(true)
+    expect(result.generatedName).toBe("MIBERA-EEEEEE") // existing, not the import
+    const methods = spine.trace.map((t) => t.method)
+    expect(methods).not.toContain("importName") // no re-import on an existing identity
+    expect(methods).not.toContain("claimGeneratedName")
+  })
+
+  it("known-wallet world-name lookup is scoped to the requested world", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    // The user has a name in a DIFFERENT world — must NOT count as existing here.
+    spine.getIdentityReturns = identityWith("existing-user-id", [
+      { worldSlug: "other-world", nameType: "generated", value: "OTHER-000000" },
+    ])
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.generatedName).toBe("MIBERA-ABCDEF") // claimed for mibera
+    expect(spine.trace.map((t) => t.method)).toContain("claimGeneratedName")
+  })
+
+  it("LEGACY identity (world_identity row, zero registry rows) → TRUE no-op, nym NOT clobbered", async () => {
+    // Pre-name-model user: claimNym wrote world_identity directly (FR-R6),
+    // no world_identity_names rows exist. Claiming here would fire the 0009
+    // recompute and overwrite the legacy nym — must be a true no-op instead.
+    spine.resolveByWalletReturns = "legacy-user-id"
+    spine.getIdentityReturns = identityWith(
+      "legacy-user-id",
+      [], // zero registry name rows
+      [{ worldSlug: "mibera", nym: "Haze" }], // legacy world_identity row
+    )
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.ok).toBe(true)
+    expect(result.idempotent).toBe(true)
+    expect(result.generatedName).toBeNull() // no generated-type row to echo; display stays "Haze"
+    const methods = spine.trace.map((t) => t.method)
+    expect(methods).not.toContain("claimGeneratedName") // the clobber that must not happen
+    expect(methods).not.toContain("importName")
+    // Audit reflects a true no-op: no generated_name key.
+    const umbrella = spine.audits.find((a) => a.event_type === "link_wallet_only")
+    expect("generated_name" in umbrella!.payload).toBe(false)
+  })
+
+  it("LEGACY identity in a DIFFERENT world does not block the claim for the requested world", async () => {
+    spine.resolveByWalletReturns = "legacy-user-id"
+    spine.getIdentityReturns = identityWith(
+      "legacy-user-id",
+      [],
+      [{ worldSlug: "other-world", nym: "Haze" }], // legacy row elsewhere only
+    )
+    const result = await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    expect(result.generatedName).toBe("MIBERA-ABCDEF") // claims-if-missing still runs
+    expect(spine.trace.map((t) => t.method)).toContain("claimGeneratedName")
   })
 
   // ── atomicity: a forced mid-transaction failure leaves NO umbrella audit ──────
@@ -237,10 +384,38 @@ describe("linkWalletOnly engine orchestrator (A3)", () => {
     expect(umbrella!.payload.discord_id).toBeUndefined()
   })
 
+  it("known-wallet CLAIM (#39): umbrella audit carries idempotent:true AND the claimed generated_name", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = null // known wallet, no world name → claims-if-missing
+    await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    const umbrella = spine.audits.find((a) => a.event_type === "link_wallet_only")
+    expect(umbrella).toBeDefined()
+    expect(umbrella!.payload.idempotent).toBe(true) // no new user minted
+    expect(umbrella!.payload.generated_name).toBe("MIBERA-ABCDEF") // a claim DID run
+  })
+
+  it("known-wallet TRUE no-op: umbrella audit has idempotent:true and NO generated_name key", async () => {
+    spine.resolveByWalletReturns = "existing-user-id"
+    spine.getIdentityReturns = identityWith("existing-user-id", [
+      { worldSlug: "mibera", nameType: "generated", value: "MIBERA-EEEEEE" },
+    ])
+    await linkWalletOnly(spine, { worldSlug: "mibera", walletAddress: WALLET })
+    const umbrella = spine.audits.find((a) => a.event_type === "link_wallet_only")
+    expect(umbrella).toBeDefined()
+    expect(umbrella!.payload.idempotent).toBe(true)
+    // Nothing was written this call, so the umbrella reflects no assign.
+    expect("generated_name" in umbrella!.payload).toBe(false)
+  })
+
   // ── injectable conflict resolver ─────────────────────────────────────────────
 
   it("honors an injected conflict resolver (default = first-claim / idempotent-noop)", async () => {
     spine.resolveByWalletReturns = "prior-user"
+    // A user with an existing world name → the resolver routes to idempotent_noop
+    // and the name step is a TRUE no-op (claims-if-missing finds the name present).
+    spine.getIdentityReturns = identityWith("prior-user", [
+      { worldSlug: "mibera", nameType: "generated", value: "MIBERA-PRIOR1" },
+    ])
     // A custom resolver that forces a fresh mint even on an existing wallet
     // would be unusual, but the seam must exist. Here we assert the DEFAULT
     // resolver yields idempotent-noop for an existing wallet.
