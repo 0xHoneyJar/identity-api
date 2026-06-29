@@ -380,17 +380,20 @@ describe("Phase 1 · Section E · beacon-valid (FR-B2)", () => {
   it("composes_with keys ⊇ {inventory-api, score-api, codex} (PRD §4.1 FR-B2 verbatim)", () => {
     const yaml = loadBeaconYaml()
     // Top-level composes_with block — captures only the immediate child keys
-    // (lines with 2-space indent followed by name:).
+    // (lines with 2-space indent followed by name:). Keys may be QUOTED with internal
+    // colons: the codex sibling is in B-transition (outer:mibera-codex → mibera-codex-api),
+    // canonicalized per loa-freeside#234/#235 (commit 623a7a2) — so allow quotes + colons.
     const block = yaml.match(/^composes_with:\n((?:\s{2}\S.*\n|\s{4,}.*\n|\s*#.*\n)+)/m)
     expect(block).not.toBeNull()
     const childKeys: string[] = []
     for (const line of block![1]!.split("\n")) {
-      const m = line.match(/^  ([a-z][a-z0-9-]*):\s*$/)
+      const m = line.match(/^  "?([a-z][a-z0-9:.-]*)"?:\s*$/)
       if (m) childKeys.push(m[1]!)
     }
     expect(childKeys).toContain("inventory-api")
     expect(childKeys).toContain("score-api")
-    expect(childKeys).toContain("codex")
+    // codex compose under its canonical B-transition slug (outer:mibera-codex), per #234/#235.
+    expect(childKeys.some((k) => k.includes("codex"))).toBe(true)
   })
 
   it("capabilities surface lists ≥ 10 entries (G-1 SDK + MCP capability roster)", () => {
