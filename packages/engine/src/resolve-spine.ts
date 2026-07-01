@@ -393,6 +393,59 @@ export async function resolveOrMintByWallet(
 }
 
 /**
+ * Resolve a Discord account to a user_id; if not present, mint a new user and
+ * link the Discord id. Consumed by POST /v1/auth/discord/exchange (#44).
+ *
+ * Transactional posture mirrors `resolveOrMintByWallet` (LBR-1): callers wrap
+ * in `spine.withTransaction` and retry once on `AccountLinkRaceError`.
+ */
+export async function resolveOrMintByDiscord(
+  spine: SpinePort,
+  opts: {
+    discordId: string
+    actor?: AuditActor
+  },
+): Promise<{ userId: string; minted: boolean }> {
+  const existing = await resolveByAccount(spine, "discord", opts.discordId)
+  if (existing) {
+    return { userId: existing, minted: false }
+  }
+  const userId = await mintUser(spine, { actor: opts.actor })
+  try {
+    await linkAccountWithAudit(spine, {
+      userId,
+      provider: "discord",
+      externalId: opts.discordId,
+      actor: opts.actor,
+    })
+  } catch (err) {
+    if (isLinkedAccountConflict(err)) {
+      throw new AccountLinkRaceError(opts.discordId)
+    }
+    throw err
+  }
+  return { userId, minted: true }
+}
+
+/** LBR-1 race-loser signal for concurrent Discord login mint+link. */
+export class AccountLinkRaceError extends Error {
+  constructor(public readonly discordId: string) {
+    super(
+      `[account-link-race] concurrent discord login lost the link race for ${discordId}; rollback + re-resolve`,
+    )
+    this.name = "AccountLinkRaceError"
+  }
+}
+
+function isLinkedAccountConflict(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false
+  const e = err as { name?: unknown; kind?: unknown; errno?: unknown; code?: unknown }
+  if (e.name === "SpineConflictError" && e.kind === "linked_account") return true
+  const isUniqueViolation = e.errno === "23505" || e.code === "23505"
+  return isUniqueViolation
+}
+
+/**
  * LBR-1 race-loser signal — the linkWallet step lost a race to a
  * concurrent verify call that also minted+linked the same wallet first.
  *

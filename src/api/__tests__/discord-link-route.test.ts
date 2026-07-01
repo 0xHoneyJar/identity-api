@@ -37,7 +37,7 @@ import {
 import { JWT_SECRET } from "../../auth"
 import {
   __resetConsumedStateNoncesForTest,
-  DiscordOAuthNotProvisioned,
+  DiscordOAuthExchangeError,
   mintOAuthState,
 } from "../../discord-oauth"
 
@@ -446,17 +446,17 @@ describe("Discord link — exchange failure mapping (never 500)", () => {
     expect(mockSpine.linkAccountCalls).toEqual([])
   })
 
-  it("the unprovisioned default exchange → 503 service_unconfigured, not 500", async () => {
+  it("a thrown DiscordOAuthExchangeError → 502 oauth_exchange_failed, not 500", async () => {
     mockSpine.resolveByAccountByProvider = { discord: null }
     __setDiscordOAuthClientForTest({
       authorizeUrl: () => "https://discord.com/oauth2/authorize",
       async exchangeCode() {
-        throw new DiscordOAuthNotProvisioned()
+        throw new DiscordOAuthExchangeError()
       },
     })
     const { status, body } = await getCallback({ jwt: jwtA, state: stateFor(USER_A) })
-    expect(status).toBe(503)
-    expect(body.code).toBe("service_unconfigured")
+    expect(status).toBe(502)
+    expect(body.code).toBe("oauth_exchange_failed")
   })
 })
 

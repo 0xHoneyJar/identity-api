@@ -377,7 +377,7 @@ describe("Phase 1 · Section E · beacon-valid (FR-B2)", () => {
     }
   })
 
-  it("composes_with keys ⊇ {inventory-api, score-api, codex} (PRD §4.1 FR-B2 verbatim)", () => {
+  it("composes_with keys ⊇ {inventory-api, score-api, outer:mibera-codex} (PRD §4.1 FR-B2 + loa-freeside#235 slug canon)", () => {
     const yaml = loadBeaconYaml()
     // Top-level composes_with block — captures only the immediate child keys
     // (lines with 2-space indent followed by name:).
@@ -385,12 +385,12 @@ describe("Phase 1 · Section E · beacon-valid (FR-B2)", () => {
     expect(block).not.toBeNull()
     const childKeys: string[] = []
     for (const line of block![1]!.split("\n")) {
-      const m = line.match(/^  ([a-z][a-z0-9-]*):\s*$/)
-      if (m) childKeys.push(m[1]!)
+      const m = line.match(/^  (?:"([^"]+)"|([a-z][a-z0-9:-]*)):\s*$/)
+      if (m) childKeys.push(m[1] ?? m[2]!)
     }
     expect(childKeys).toContain("inventory-api")
     expect(childKeys).toContain("score-api")
-    expect(childKeys).toContain("codex")
+    expect(childKeys).toContain("outer:mibera-codex")
   })
 
   it("capabilities surface lists ≥ 10 entries (G-1 SDK + MCP capability roster)", () => {

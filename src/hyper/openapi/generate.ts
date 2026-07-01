@@ -114,12 +114,14 @@ function buildOperation(r: Route, converters: readonly SchemaConverter[]): OpenA
     r.meta.examples as readonly RouteExample[] | undefined,
   )
   const responses: OpenAPIOperation["responses"] = {
-    "200": {
-      description: "success",
-      ...(responseExamples && {
-        content: { "application/json": { example: responseExamples } },
-      }),
-    },
+    "200": responseExamples
+      ? {
+          description: "success",
+          content: { "application/json": { example: responseExamples } },
+        }
+      : {
+          description: "success",
+        },
   }
 
   if (r.throws) {

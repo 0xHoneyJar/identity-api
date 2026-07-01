@@ -23,6 +23,7 @@ import {
   claimNymWithAudit,
   setPrimaryWithAudit,
   resolveOrMintByWallet,
+  resolveOrMintByDiscord,
 } from "../resolve-spine"
 import type {
   SpinePort,
@@ -404,5 +405,31 @@ describe("resolve-spine.ts engine orchestrators (T1.5)", () => {
     // The wallet_linked audit carries is_primary=true (resolveOrMint promotes
     // the first wallet for a new user to primary).
     expect(spine.audits[1]!.payload.is_primary).toBe(true)
+  })
+
+  // ── resolveOrMintByDiscord (#44) ───────────────────────────────────────
+
+  it("resolveOrMintByDiscord returns existing user when discord is bound", async () => {
+    spine.resolveByAccountReturns = "existing-discord-user"
+    const got = await resolveOrMintByDiscord(spine, { discordId: "1234567890" })
+    expect(got).toEqual({ userId: "existing-discord-user", minted: false })
+    expect(spine.trace.map((t) => t.method)).toEqual(["resolveByAccount"])
+  })
+
+  it("resolveOrMintByDiscord mints + links when discord is unbound", async () => {
+    spine.resolveByAccountReturns = null
+    spine.mintUserReturns = "fresh-discord-user"
+    const got = await resolveOrMintByDiscord(spine, {
+      discordId: "1234567890",
+      actor: "self",
+    })
+    expect(got).toEqual({ userId: "fresh-discord-user", minted: true })
+    expect(spine.trace.map((t) => t.method)).toEqual([
+      "resolveByAccount",
+      "mintUser",
+      "writeAuditEvent",
+      "linkAccount",
+      "writeAuditEvent",
+    ])
   })
 })

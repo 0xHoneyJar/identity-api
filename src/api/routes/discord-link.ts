@@ -41,7 +41,7 @@ import {
 } from "@freeside-auth/engine"
 import {
   defaultDiscordOAuthClient,
-  DiscordOAuthNotProvisioned,
+  DiscordOAuthExchangeError,
   getDiscordOAuthConfig,
   mintOAuthState,
   tryConsumeStateNonce,
@@ -189,12 +189,12 @@ export const discordLinkCallback = callbackBuilder.auth().handle(async (c) => {
   // failure (bad/expired code, Discord/network) → 502 — never an unhandled 500.
   let discordId: string
   try {
-    discordId = await _oauthClient.exchangeCode({ config, code })
+    discordId = await _oauthClient.exchangeCode({ config, code, redirectUri: config.callbackUrl })
   } catch (err) {
-    if (err instanceof DiscordOAuthNotProvisioned) {
-      return jsonResponse(503, {
-        code: "service_unconfigured",
-        message: "Discord OAuth code-exchange client is not provisioned",
+    if (err instanceof DiscordOAuthExchangeError) {
+      return jsonResponse(502, {
+        code: "oauth_exchange_failed",
+        message: "Discord OAuth code exchange failed",
       })
     }
     return jsonResponse(502, {

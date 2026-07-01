@@ -71,6 +71,8 @@ export {
 export {
   createLocalEs256Signer,
   createLocalEs256SignerFromEnv,
+  exportSvcPublicJwk,
+  buildJwksDocumentFromEnv,
   __generateTestEs256KeyMaterial,
   type ServiceJwtSigner,
   type LocalEs256SignerConfig,

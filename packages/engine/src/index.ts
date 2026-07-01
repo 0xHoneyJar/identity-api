@@ -66,8 +66,10 @@ export {
   claimNymWithAudit,
   setPrimaryWithAudit,
   resolveOrMintByWallet,
+  resolveOrMintByDiscord,
   normalizeAddress,
   WalletLinkRaceError,
+  AccountLinkRaceError,
   type AuditActor,
 } from './resolve-spine';
 

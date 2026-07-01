@@ -114,7 +114,7 @@ export function session(config: SessionConfig): Middleware {
       get<T>(k: string): T | undefined {
         return data[k] as T | undefined
       },
-      set(k, v) {
+      set(k: string, v: unknown) {
         data[k] = v
         dirty = true
       },

@@ -261,7 +261,7 @@ export async function composeProfile(
   if (!holdingsRes.ok) {
     degraded.push(labelFor("inventory", holdingsRes.reason.kind))
   }
-  if (!scoreRes.ok) {
+  if (!scoreRes.ok && scoreRes.reason.kind !== "not_found") {
     degraded.push(labelFor("score", scoreRes.reason.kind))
   }
 

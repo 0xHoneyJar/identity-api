@@ -50,6 +50,8 @@ import { getProfile, getMiberaDimensions } from "./routes/profile"
 import { resolveIdentityBatch } from "./routes/identity-resolve"
 import { linkVerifiedWallet, linkWalletOnly } from "./routes/link"
 import { discordLinkInitiate, discordLinkCallback } from "./routes/discord-link"
+import { authDiscordAuthorize, authDiscordExchange } from "./routes/auth-discord"
+import { wellKnownJwks } from "./routes/well-known-jwks"
 
 // W2.5 sprint-2 T-2.6 — cell-API-key-authenticated svc-JWT issuance.
 import { serviceJwtIssue } from "./routes/v1/auth/service-jwt"
@@ -92,6 +94,9 @@ const app = new Hyper()
     linkWalletOnly,
     discordLinkInitiate,
     discordLinkCallback,
+    authDiscordAuthorize,
+    authDiscordExchange,
+    wellKnownJwks,
 
     serviceJwtIssue,
 

@@ -327,7 +327,30 @@ The risk profile of a vendored update is **bounded**: you control when it
 happens, what changes, and you can `git revert` your vendored-copy commit
 without affecting upstream.
 
-## Deferred work
+## BFF-only consumption (identity-api#42)
+
+**Doctrine:** browser clients MUST NOT call identity-api directly for auth or
+link flows. Each world/dashboard exposes a **server-side BFF** that holds
+service tokens and forwards OAuth/SIWE on behalf of the user.
+
+| Flow | Browser hits | Server forwards to |
+|------|--------------|-------------------|
+| Wallet SIWE login | dashboard `/api/auth/*` | `POST /v1/auth/challenge` + `/verify` |
+| Discord login | dashboard `/api/auth/discord/*` | `GET /v1/auth/discord/authorize` + `POST /exchange` |
+| Discord link (session) | N/A (server redirect) | `GET /v1/link/discord/*` |
+| Batch resolve (Members lens) | dashboard server action | `POST /v1/identity/resolve` + `X-Service-Token` |
+
+The vendored SDK is intended for **server runtimes** (BFF, workers, scripts).
+If you import it in a `"use client"` module, you are holding it wrong — mirror
+`freeside-dashboard/src/lib/freeside-worlds/cm-auth.ts` and
+`src/lib/identity/resolve-client.ts` (both `server-only`).
+
+CORS is intentionally closed on identity-api; adding an origin allowlist is
+a last resort for worlds that cannot host a BFF.
+
+---
+
+## Deferred work (original)
 
 - **profile.get** (`/v1/profile`) — 501 until T2.3 (bead `arrakis-eqxj`). Once
   T2.3 lands, the SDK surface is unchanged; the response inflates from

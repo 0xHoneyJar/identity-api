@@ -41,11 +41,17 @@ export const MIN_JWT_SECRET_BYTES = 32
 
 /** Validates a JWT secret against the minimum-length rule. Throws with why/fix. */
 export function validateJwtSecret(
-  secret: string,
+  secret: string | Uint8Array | undefined,
   opts: { readonly allowShort?: boolean } = {},
 ): void {
+  if (secret === undefined) {
+    throw new Error(
+      "@hyper/auth-jwt: secret is required. Why: HS256 verification needs key material. Fix: pass `secret` in authJwtPlugin/authJwt config.",
+    )
+  }
   if (opts.allowShort) return
-  const bytes = new TextEncoder().encode(secret).byteLength
+  const bytes =
+    typeof secret === "string" ? new TextEncoder().encode(secret).byteLength : secret.byteLength
   if (bytes < MIN_JWT_SECRET_BYTES) {
     throw new Error(
       `@hyper/auth-jwt: secret is ${bytes} bytes; minimum is ${MIN_JWT_SECRET_BYTES}. Why: short HS256 secrets are brute-forceable in hours on commodity hardware. Fix: generate a 32+ byte secret (e.g., \`openssl rand -base64 48\`) or pass \`allowShortSecret: true\` at your own risk.`,

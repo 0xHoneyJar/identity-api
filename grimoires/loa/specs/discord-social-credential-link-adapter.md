@@ -8,6 +8,21 @@ A first build attempt added a `credential-bridge-discord.ts` and a `discord` `Cr
 
 **The ONLY real gap = the OAuth verification front-end.** The existing link path assumes the `discordId` is *already verified* (an external service POSTs it under a service token). What does not exist: a **user-session-gated, in-repo flow that runs the Discord OAuth itself** to *produce* a verified `discordId`. That — and only that — is this build.
 
+## Addendum — Discord-first login (ratified 2026-06-30, identity-api#44)
+
+Parallel to the **session-gated link** flow above, identity-api exposes an **unauthenticated login** seam for BFF consumers (freeside-dashboard):
+
+| Route | Auth | Purpose |
+|-------|------|---------|
+| `GET /v1/auth/discord/authorize?redirect_uri=&state=` | none | Validate `redirect_uri` against `DISCORD_LOGIN_REDIRECT_ALLOWLIST`; mint signed login-state `{ redirect_uri, csrf_state, nonce, exp }`; 302 → Discord OAuth with that `redirect_uri` |
+| `POST /v1/auth/discord/exchange` `{ code, redirect_uri }` | none | Exchange code → verified `discordId`; `resolveOrMintByDiscord`; mint session JWT (same shape as wallet `/v1/auth/verify`) |
+
+**Boundary (unchanged from DO NOT):** Discord still does **not** enter `/v1/auth/verify` credential-bridge dispatch. Login is a dedicated OAuth path, not a new `CredentialScheme`.
+
+**Shared OAuth client:** `DiscordOAuthClient.exchangeCode` is implemented once (fetch → Discord token + `@me`) and shared by link + login. Link uses fixed `DISCORD_LINK_CALLBACK_URL`; login uses per-request `redirect_uri` from the allowlist.
+
+**Audit:** successful login emits `auth_verified` with `scheme: "discord_oauth"`.
+
 ## DO NOT (hard)
 
 - ❌ NO `credential-bridge-discord.ts`. ❌ NO new `CredentialScheme` value. ❌ Do not touch `packages/adapters/src/credential-bridge*.ts` or the `/v1/auth/verify` dispatch — Discord is **not** a verify-path login credential.
