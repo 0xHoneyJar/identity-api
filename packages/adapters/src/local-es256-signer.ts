@@ -35,7 +35,7 @@
  * JWT output).
  */
 
-import { exportPKCS8, generateKeyPair, importPKCS8, SignJWT } from 'jose';
+import { exportPKCS8, exportJWK, generateKeyPair, importPKCS8, SignJWT } from 'jose';
 
 /**
  * Narrow ES256 signer surface consumed by the svc-JWT issuance route.
@@ -156,4 +156,33 @@ export async function createLocalEs256SignerFromEnv(): Promise<ServiceJwtSigner>
     );
   }
   return createLocalEs256Signer({ pkcs8Pem: pem, kid });
+}
+
+/** Export the public JWK for a svc signing key (JWKS document composer). */
+export async function exportSvcPublicJwk(
+  pkcs8Pem: string,
+  kid: string,
+): Promise<Record<string, unknown>> {
+  const key = await importPKCS8(pkcs8Pem, 'ES256', { extractable: true });
+  const jwk = await exportJWK(key);
+  return { ...jwk, kid, use: 'sig', alg: 'ES256' };
+}
+
+/**
+ * Build the JWKS document from env (active + optional PREV rotation pair).
+ * Returns `{ keys: [] }` when no svc key material is configured.
+ */
+export async function buildJwksDocumentFromEnv(): Promise<{ keys: Record<string, unknown>[] }> {
+  const keys: Record<string, unknown>[] = [];
+  const pem = process.env.SVC_JWT_SIGNING_KEY_PEM;
+  const kid = process.env.SVC_JWT_SIGNING_KEY_KID;
+  if (pem && kid) {
+    keys.push(await exportSvcPublicJwk(pem, kid));
+  }
+  const prevPem = process.env.SVC_JWT_SIGNING_KEY_PEM_PREV;
+  const prevKid = process.env.SVC_JWT_SIGNING_KEY_KID_PREV;
+  if (prevPem && prevKid) {
+    keys.push(await exportSvcPublicJwk(prevPem, prevKid));
+  }
+  return { keys };
 }

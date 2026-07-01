@@ -71,9 +71,9 @@ export async function verifyJwt(
     if (!options.secret) throw new JwtError("no_secret", "secret required for HMAC")
     const key = await crypto.subtle.importKey(
       "raw",
-      typeof options.secret === "string"
+      (typeof options.secret === "string"
         ? new TextEncoder().encode(options.secret)
-        : options.secret,
+        : options.secret) as BufferSource,
       { name: "HMAC", hash: digest },
       false,
       ["sign"],

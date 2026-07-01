@@ -445,12 +445,10 @@ describe("client.profile.get (FR-P1, T2.3 wired)", () => {
     // Inventory failed → no holdings field, inventory entry in degraded[].
     expect(profile.holdings).toBeUndefined()
     expect(profile.degraded).toContain("inventory:upstream_5xx")
-    // Score mock defaults to not_found → score field omitted, surfaced in
-    // degraded[] (per labelFor at compose-profile.ts:393). The breaker
-    // treats not_found as healthy (recordOutcome at :374) — the visible-vs-
-    // health-signal distinction.
+    // Score mock defaults to not_found → score field omitted; not_found is
+    // healthy empty state (#6) and is NOT listed in degraded[].
     expect(profile.score).toBeUndefined()
-    expect(profile.degraded).toContain("score:not_found")
+    expect(profile.degraded).not.toContain("score:not_found")
   })
 
   it("throws ValidationError(400) when neither userId nor wallet provided", async () => {
