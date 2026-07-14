@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/0xHoneyJar/loa-freeside/177a57a4fdb18c071b4f82f7560ca705b5807a1c/spec/product/system-component.schema.json",
+  "schema_version": "1.0",
+  "component_id": "identity-api",
+  "repository": "github:0xHoneyJar/identity-api",
+  "layer": "building",
+  "operator": {
+    "role": "Freeside systems component engineer",
+    "job": "Resolve wallets and social credentials to a canonical member without duplicating authentication or linking policy in a BFF."
+  },
+  "object": {
+    "kind": "system-component",
+    "description": "The identity and authentication spine for wallet, SIWE, passkey, Discord, Telegram, and legacy credentials."
+  },
+  "question": "Which fragmented credentials and accounts belong to the same canonical community member?",
+  "responsibility": "Own credential verification, identity linking, canonical user resolution, and issuer-facing identity contracts.",
+  "consumers": [
+    {
+      "name": "loa-freeside",
+      "need": "One canonical member join key across social and onchain producers."
+    },
+    {
+      "name": "freeside-dashboard",
+      "need": "Person-centered identity context without implementing credential verification."
+    },
+    {
+      "name": "freeside-characters",
+      "need": "Resolved member identity claims at the tool boundary rather than inside character voice."
+    }
+  ],
+  "trust": {
+    "contract_status": "partial",
+    "contract_refs": [
+      "file:packages/protocol/src/user.schema.json",
+      "file:packages/protocol/src/resolve-result.schema.json"
+    ],
+    "evidence_refs": [
+      "file:README.md"
+    ],
+    "note": "Protocol schemas exist, but the README explicitly records issuer-doctrine drift and an active major revision; consumers must pin the reconciled contract rather than stale narrative."
+  },
+  "actions": [
+    "resolve",
+    "verify",
+    "link",
+    "inspect"
+  ],
+  "boundaries": {
+    "owns": [
+      "Credential verification, canonical identity resolution, and credential linking.",
+      "Identity claims and their protocol shapes."
+    ],
+    "does_not_own": [
+      "Engagement or conviction scoring.",
+      "Onchain holdings truth.",
+      "Member-profile information architecture or outreach decisions."
+    ],
+    "missing_capability_handoff": "Open a typed identity contract change against this building; never infer or persist identity joins in a downstream BFF."
+  },
+  "flow_moments": [
+    {
+      "flow_moment_id": "FM-AUDIT-COMPOSITION",
+      "canonical_ref": "flow:FM-AUDIT-COMPOSITION",
+      "role": "producer",
+      "contribution": "Resolve fragmented wallet and social identities into the person-level join used by Audit composition receipts."
+    }
+  ]
+}
