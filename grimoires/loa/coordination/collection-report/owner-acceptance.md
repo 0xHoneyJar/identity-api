@@ -375,7 +375,9 @@ Performed on branch `coord/collection-report-coordinator-f09.58` after
   flags / rollback, ops ownership, evidence, closure conditions).
 - Absence audit commands recorded in §7 (no CR implementation).
 
-No CR code was implemented. No commit, push, PR, or merge.
+No CR code was implemented. This acceptance document is committed and pushed
+through PR #49 for review; it does not authorize downstream CR implementation,
+issue creation, merge, or production release.
 
 ---
 
