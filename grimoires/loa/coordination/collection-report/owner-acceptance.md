@@ -6,7 +6,8 @@
 | Repository | `0xHoneyJar/identity-api` |
 | Branch | `coord/collection-report-coordinator-f09.58` |
 | Audited baseline | `origin/main` @ `ab74bf16b4fac8c57f14e6d7d89e237d588255bd` (`Merge pull request #46 from 0xHoneyJar/feat/qmd-coverage-extension`, 2026-06-30) |
-| Masters | coordinator `prd.md` / `sdd.md` / `sprint.md` (2026-07-15 candidates; PRD v0.3 / SDD v0.5 / Sprint v0.6) |
+| Original master snapshot | coordinator commit `f3b1b8ed616836c586545bceb5618507bc0f4e14` (PRD v0.3 / SDD v0.5 / Sprint v0.6 candidates) |
+| Re-affirmed master snapshot | coordinator commit `2c1be075e34f896704e0e8ff45500aeaddcd1a10` (PRD v0.3 candidate / SDD v0.6 active / Sprint v0.7 active; exact bindings below) |
 | Date | 2026-07-16 |
 | Author role | identity-api maintainer (boundary owner; KRANZ dispatch) |
 | **Verdict** | **conditional** |
@@ -14,6 +15,7 @@
 This document is owner acceptance under sprint §13. It does **not** authorize
 CR implementation, issue creation, push, PR, or merge. It is **not** human
 privacy/security approval, Discord-policy Go (CR-000), or production readiness.
+Its promises apply only to the exact master blobs recorded below.
 
 ---
 
@@ -39,6 +41,30 @@ system required for Gate Leak.
 
 Unestimated restricted snapshot / trust-stream / consent capacity remains
 **not issue-ready** per sprint §6 (“unestimated is blocked”).
+
+### 1.1 Master binding and re-affirmation
+
+This acceptance was authored against the candidate snapshot at coordinator
+commit `f3b1b8ed616836c586545bceb5618507bc0f4e14`. Before review closure, the
+coordinator activated execution at
+`2c1be075e34f896704e0e8ff45500aeaddcd1a10`. Identity re-diffed the two exact
+commits: the activation changed plan status, the Dashboard order-route
+namespace, and execution-admission text; it did **not** change Identity's
+`CR-008` / `CR-011B` / `CR-017` assignment or the SDD §14.5 / §16.6 and sprint
+G1B-3 / G4B obligations accepted here. Identity therefore re-affirms this
+conditional acceptance against the active execution snapshot:
+
+| Master | Version / status | Git blob | SHA-256 |
+|---|---|---|---|
+| `grimoires/loa/prd.md` | v0.3 / Candidate | `ef5847c06f880d99927a985a0ec7eaa3d216b4c0` | `4866ca1ccb580e7743a6f3523e73249d4ade13b0931424df1be782f644247f0c` |
+| `grimoires/loa/sdd.md` | v0.6 / Active | `5b431433954194ae181685f249caa42e772b2b6c` | `1cca56898cafb39a1a4b1e8fa03600955c48bddf5f24bcc63b871d840c50ff79` |
+| `grimoires/loa/sprint.md` | v0.7 / Active | `f76863bb2302bae660ad5a57a2a9ea4888be918d` | `5a1580248e34ae077616404de33524ce7e6338a509c99755707a2e2f3d30c1d3` |
+
+The PRD remains a candidate, so this is not a claim that every master has been
+ratified. If any bound blob changes before an Identity CR becomes issue-ready,
+the maintainer must diff the replacement against this table and record an
+explicit re-affirmation (or withdraw acceptance) before implementation or
+merge.
 
 ---
 
@@ -76,7 +102,9 @@ These surfaces are **precedent and substrate**, not aliases for
 | Gate Leak anti-enumeration ledger participation | Mapping churn / low-overlap probe limits bind privacy review | **Not owned here**; Identity must fail closed on unauthorized snapshot acquisition |
 
 Identity will **consume** ratified shared-protocol schemas from `loa-freeside`
-(CR-007B, CR-009) and will not hand-mirror Ordering or Shadow Audit types.
+(CR-007B, CR-009) and, once ratified, the Shadow Audit cohort contract
+(CR-016); these are upstream dependencies, not Identity-owned deliverables.
+Identity will not hand-mirror Ordering or Shadow Audit types.
 
 Wire Identity commits to produce once CRs land (acknowledged, not implemented):
 
@@ -138,6 +166,10 @@ Assumptions: one primary maintainer familiar with this repo; CR-000 Go; shared
 CR-007B / CR-009 fixtures land from loa-freeside; Shadow Audit supplies
 subject-set digests; Dashboard owns consent UX against Identity’s authority
 API; no concurrent full-spine migration fire drill.
+
+Calendar ranges marked **High** uncertainty are pre-spike order-of-magnitude
+estimates, not scheduling commitments. They must be replaced after the named
+design or load spike before issue readiness.
 
 | Work | Size | Headcount · calendar | Uncertainty |
 |---|---|---|---|
@@ -236,11 +268,14 @@ Commands and observations used for this acceptance (worktree branch
 1. **Baseline:** `git rev-parse origin/main` →
    `ab74bf16b4fac8c57f14e6d7d89e237d588255bd` (matches sprint §2 identity-api
    baseline).
-2. **Absent Gate Leak surfaces:** ripgrep over packages/src/docs/grimoires
-   (excluding vendored `.claude` trees) for `identity_link_snapshot`,
+2. **Absent Gate Leak surfaces:** exact `git grep` over packages/src/docs/grimoires
+   (excluding vendored `.claude` trees by positive path scope) for `identity_link_snapshot`,
    `community_gate_audit`, `purpose_consent`, `trust_envelope`,
    `transactional_outbox`, `tombstone_stream`, `anti_enumeration`,
-   `restore_quarantine` → **no substantive hits**.
+   `restore_quarantine` → **no hits**. “Substantive” does not hide comments or
+   fixtures under these first-party paths; either would count. Only dependency,
+   vendored framework, cache, and other paths outside the explicit scope are
+   excluded.
 3. **Spine present:** migrations 0001–0009; soft-unlink columns; `audit_events`;
    resolve + identity-resolve + Discord link + SIWE auth; beacon SoR charter.
 4. **Unlink/revocation gap:** `unlinked_at = NOW()` only in backfill-revert
@@ -261,6 +296,25 @@ Commands and observations used for this acceptance (worktree branch
    mixed-version refusal when Identity cannot issue MVCC/watermarks/handles;
    sprint G4B / G1B-3 depend on CR-008/016/017 — Identity alone cannot close
    them.
+
+Reproducible absence and product-write checks:
+
+```bash
+baseline=ab74bf16b4fac8c57f14e6d7d89e237d588255bd
+
+git grep -nE \
+  'identity_link_snapshot|community_gate_audit|purpose_consent|trust_envelope|transactional_outbox|tombstone_stream|anti_enumeration|restore_quarantine' \
+  "$baseline" -- packages src docs grimoires \
+  ':(exclude)grimoires/loa/coordination/collection-report/**'
+# exit 1, no output: no match in the audited first-party scope
+
+git grep -nE \
+  'unlinked_at[[:space:]]*=[[:space:]]*(NOW\(\)|CURRENT_TIMESTAMP)|wallet_unlinked|account_unlinked' \
+  "$baseline" -- packages src \
+  ':(exclude,glob)**/__tests__/**' \
+  ':(exclude,glob)packages/adapters/src/migrations/**'
+# exit 1, no output: no product-path unlink write or event emission
+```
 
 ---
 
@@ -297,6 +351,10 @@ coordinator with the named external owners:
     writers deploy.
 12. **Human privacy approval** for production identity rows / purpose — still
     **absent**; must come from the privacy/security owner, not from this file.
+13. **Master re-affirmation** — if any PRD / SDD / Sprint blob in §1.1 changes,
+    diff the replacement against the bound snapshot and record maintainer
+    re-affirmation or withdrawal before CR-008 / CR-011B / CR-017 implementation
+    or merge.
 
 Public spine work (resolve, link, JWT, world names) is **not** blocked by these
 conditions, but must not be marketed as satisfying G1B-3 / G4B / CR-008.
@@ -308,7 +366,8 @@ conditions, but must not be marketed as satisfying G1B-3 / G4B / CR-008.
 Performed on branch `coord/collection-report-coordinator-f09.58` after
 `bun install --frozen-lockfile`:
 
-- `bun run typecheck` (`tsc --noEmit` via package script) — pass.
+- `bun run typecheck` (`tsc --noEmit` via package script) — pass; this confirms
+  baseline TypeScript health only and does not validate the Markdown diff.
 - Structural check: this file exists at
   `grimoires/loa/coordination/collection-report/owner-acceptance.md` with
   verdict ∈ {accepted, conditional, blocked} and required sections
