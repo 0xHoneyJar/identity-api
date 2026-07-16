@@ -12,10 +12,12 @@
 | Author role | identity-api maintainer (boundary owner; KRANZ dispatch) |
 | **Verdict** | **conditional** |
 
-This document is owner acceptance under sprint §13. It does **not** authorize
-CR implementation, issue creation, push, PR, or merge. It is **not** human
-privacy/security approval, Discord-policy Go (CR-000), or production readiness.
-Its promises apply only to the exact master blobs recorded below.
+This document is owner acceptance under sprint §13 and may merge as a
+coordination record. It does **not** authorize downstream CR implementation,
+issue creation, implementation PRs or merges, or production release. It is
+**not** human privacy/security approval, Discord-policy Go (CR-000), or
+production readiness. Its promises apply only to the exact master blobs
+recorded below.
 
 ---
 
@@ -64,7 +66,7 @@ The PRD remains a candidate, so this is not a claim that every master has been
 ratified. If any bound blob changes before an Identity CR becomes issue-ready,
 the maintainer must diff the replacement against this table and record an
 explicit re-affirmation (or withdraw acceptance) before implementation or
-merge.
+merge of an Identity CR.
 
 ---
 
