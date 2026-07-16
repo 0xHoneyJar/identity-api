@@ -375,6 +375,24 @@ Performed on branch `coord/collection-report-coordinator-f09.58` after
   verdict ∈ {accepted, conditional, blocked} and required sections
   (interfaces, authority/forbidden inference, bottom-up estimate, mixed-version /
   flags / rollback, ops ownership, evidence, closure conditions).
+  Reproduce from the repository root; success is exit status `0`:
+
+  ```sh
+  file=grimoires/loa/coordination/collection-report/owner-acceptance.md
+  test -f "$file" &&
+    rg -q '^\| \*\*Verdict\*\* \| \*\*(accepted|conditional|blocked)\*\* \|$' "$file" &&
+    for section in \
+      'Exact interfaces' \
+      'Authority boundaries and forbidden inference' \
+      'Bottom-up estimate' \
+      'Mixed-version / flags / deploy / rollback' \
+      'Operational ownership' \
+      'Current evidence' \
+      'Unresolved closure conditions'
+    do
+      rg -q "^## [0-9]+\\. ${section}" "$file" || exit 1
+    done
+  ```
 - Absence audit commands recorded in §7 (no CR implementation).
 
 No CR code was implemented. This acceptance document is committed and pushed
