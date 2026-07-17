@@ -6,8 +6,8 @@
 | Repository | `0xHoneyJar/identity-api` |
 | Branch | `coord/collection-report-coordinator-f09.58` |
 | Audited baseline | `origin/main` @ `ab74bf16b4fac8c57f14e6d7d89e237d588255bd` (`Merge pull request #46 from 0xHoneyJar/feat/qmd-coverage-extension`, 2026-06-30) |
-| Original master snapshot | coordinator commit `f3b1b8ed616836c586545bceb5618507bc0f4e14` (PRD v0.3 / SDD v0.5 / Sprint v0.6 candidates) |
-| Re-affirmed master snapshot | coordinator commit `2c1be075e34f896704e0e8ff45500aeaddcd1a10` (PRD v0.3 candidate / SDD v0.6 active / Sprint v0.7 active; exact bindings below) |
+| Original master snapshot | unpublished coordinator repo (local Git only; not a GitHub remote) @ `f3b1b8ed616836c586545bceb5618507bc0f4e14` (PRD v0.3 / SDD v0.5 / Sprint v0.6 candidates) |
+| Re-affirmed master snapshot | same unpublished coordinator @ `2c1be075e34f896704e0e8ff45500aeaddcd1a10` (PRD v0.3 candidate / SDD v0.6 active / Sprint v0.7 active; exact bindings below) |
 | Date | 2026-07-16 |
 | Author role | identity-api maintainer (boundary owner; KRANZ dispatch) |
 | **Verdict** | **conditional** |
@@ -46,6 +46,16 @@ Unestimated restricted snapshot / trust-stream / consent capacity remains
 
 ### 1.1 Master binding and re-affirmation
 
+**Coordinator provenance (required to read the table below):** the bound
+masters live in the **unpublished local-only collection-report coordinator
+checkout** (tracker #48 / Dashboard coordination notes may point at
+`0xHoneyJar/freeside-dashboard` for *task tracking*, but that repository
+gitignores `prd*.md` / `sdd*.md` / `sprint*.md` and does **not** host these
+blobs). The commits below are **not** resolvable on GitHub. They are **not**
+the files at the same relative paths inside `0xHoneyJar/identity-api`
+(`grimoires/loa/{prd,sdd,sprint}.md` on this repo are different objects and
+must never be treated as the bound snapshot).
+
 This acceptance was authored against the candidate snapshot at coordinator
 commit `f3b1b8ed616836c586545bceb5618507bc0f4e14`. Before review closure, the
 coordinator activated execution at
@@ -56,11 +66,15 @@ namespace, and execution-admission text; it did **not** change Identity's
 G1B-3 / G4B obligations accepted here. Identity therefore re-affirms this
 conditional acceptance against the active execution snapshot:
 
-| Master | Version / status | Git blob | SHA-256 |
+| Master (coordinator-local path) | Version / status | Git blob | SHA-256 |
 |---|---|---|---|
 | `grimoires/loa/prd.md` | v0.3 / Candidate | `ef5847c06f880d99927a985a0ec7eaa3d216b4c0` | `4866ca1ccb580e7743a6f3523e73249d4ade13b0931424df1be782f644247f0c` |
 | `grimoires/loa/sdd.md` | v0.6 / Active | `5b431433954194ae181685f249caa42e772b2b6c` | `1cca56898cafb39a1a4b1e8fa03600955c48bddf5f24bcc63b871d840c50ff79` |
 | `grimoires/loa/sprint.md` | v0.7 / Active | `f76863bb2302bae660ad5a57a2a9ea4888be918d` | `5a1580248e34ae077616404de33524ce7e6338a509c99755707a2e2f3d30c1d3` |
+
+Disambiguation: Identity-repo paths `grimoires/loa/prd.md`, `sdd.md`, and
+`sprint.md` on `ab74bf1` (blobs `a47e71b9…` / `21789071…` / `7e349e19…`) are
+**out of scope** for this binding table.
 
 The PRD remains a candidate, so this is not a claim that every master has been
 ratified. If any bound blob changes before an Identity CR becomes issue-ready,
@@ -335,7 +349,12 @@ coordinator with the named external owners:
 3. **CR-009** trust-envelope fixtures published; Identity producer shape frozen.
 4. **CR-008 design spike** in-repo (or linked ADR): snapshot schema, MVCC
    token, subject-set/page digests, unlink API + tombstone outbox, 50k/500
-   fixtures — then **re-estimate** headcount.
+   fixtures — then **re-estimate** headcount. The spike **must** close the
+   `resolveByAccount` unlink asymmetry recorded in §2.1 / §7: wallet resolve
+   filters `unlinked_at` today while `resolveByAccount` does not. Soft-unlink /
+   consent-withdrawal writers must not ship while account-resolve still maps
+   provider external ids to prior `user_id` after unlink (Gate Leak
+   invalidation would fail closed incorrectly for account-keyed callers).
 5. **CR-017** purpose-grant schema + Dashboard-focused consent/re-consent/
    withdrawal journeys; no silent migration grant for existing linked users.
 6. **CR-016** Shadow Audit subject-set digest / mapped-role cohort producer
@@ -379,8 +398,10 @@ Performed on branch `coord/collection-report-coordinator-f09.58` after
 
   ```sh
   file=grimoires/loa/coordination/collection-report/owner-acceptance.md
+  # Prefer rg; fall back to grep -E when ripgrep is unavailable.
+  match() { if command -v rg >/dev/null 2>&1; then rg -q "$1" "$2"; else grep -Eq "$1" "$2"; fi; }
   test -f "$file" &&
-    rg -q '^\| \*\*Verdict\*\* \| \*\*(accepted|conditional|blocked)\*\* \|$' "$file" &&
+    match '^\| \*\*Verdict\*\* \| \*\*(accepted|conditional|blocked)\*\* \|$' "$file" &&
     for section in \
       'Exact interfaces' \
       'Authority boundaries and forbidden inference' \
@@ -390,7 +411,7 @@ Performed on branch `coord/collection-report-coordinator-f09.58` after
       'Current evidence' \
       'Unresolved closure conditions'
     do
-      rg -q "^## [0-9]+\\. ${section}" "$file" || exit 1
+      match "^## [0-9]+\\. ${section}" "$file" || exit 1
     done
   ```
 - Absence audit commands recorded in §7 (no CR implementation).
