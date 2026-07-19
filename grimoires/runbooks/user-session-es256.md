@@ -83,3 +83,7 @@ Full svc-plane rotation detail (same 2-key model): `grimoires/runbooks/jwks-rota
 bun test packages/adapters/src/__tests__/local-user-es256-signer.test.ts
 bun test src/api/__tests__/jwt-mint-es256.test.ts
 ```
+
+## CI requirement
+
+CI jobs that exercise auth mint/verify **must** set `USER_JWT_SIGNING_KEY_PEM` and `USER_JWT_SIGNING_KEY_KID` (ephemeral P-256) so `mintSessionJwt` returns `alg: "ES256"`. Relying on the HS256 fallback hides production readiness gaps (bridge finding F012).
