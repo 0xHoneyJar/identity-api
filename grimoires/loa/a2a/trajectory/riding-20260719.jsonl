@@ -1,0 +1,12 @@
+{"timestamp": "2026-07-19T21:47:38Z", "phase": 0, "action": "preflight", "status": "complete", "details": {"framework_version": "1.196.0", "enriched": true}}
+{"timestamp": "2026-07-19T21:47:38Z", "phase": "flags", "action": "enrichment_flags_parsed", "status": "complete", "details": {"ENRICH_GAPS": true, "ENRICH_DECISIONS": true, "ENRICH_TERMS": true, "ENRICH_SIMPLICITY": true}}
+{"timestamp": "2026-07-19T21:47:38Z", "phase": 0.6, "action": "staleness_check", "status": "first_ride", "artifact_age_days": null}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 1, "action": "claims_written", "status": "complete"}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 2, "action": "extraction", "status": "complete", "details": {"scoped": ["packages", "src"]}}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 4, "action": "drift", "status": "complete", "details": {"score": 62}}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 6, "action": "prd_sdd", "status": "complete", "details": {"archived_operator_prd": "legacy/pre-ride-2026-07-19/prd.md"}}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 12, "action": "gaps", "status": "complete", "details": {"open": 10}}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 13, "action": "decisions", "status": "complete"}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 14, "action": "terminology", "status": "complete"}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": 15, "action": "simplicity", "status": "complete"}
+{"timestamp": "2026-07-19T21:52:39Z", "phase": "done", "action": "ride_complete", "status": "complete", "details": {"mode": "enriched"}}

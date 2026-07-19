@@ -1,0 +1,1413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Identity API Authentication & Linking — AHP Decision Matrix</title>
+<style>
+:root {
+  --ink:#0b1f33; --muted:#526174; --line:#cbd5e1; --paper:#ffffff; --wash:#f8fafc;
+  --blue:#1d4ed8; --teal:#0f766e; --green:#15803d; --amber:#b45309; --red:#b91c1c;
+  --navy:#0b1f33; --shadow:0 12px 34px rgba(15,23,42,.09);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:#e6edf5; --muted:#a6b3c3; --line:#334155; --paper:#101827; --wash:#0b1220;
+    --navy:#07111e; --shadow:0 12px 34px rgba(0,0,0,.28);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.52 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+header{background:linear-gradient(135deg,#071827 0%,#0b3150 60%,#0f766e 100%);color:white;padding:62px 28px 54px}
+.header-inner{max-width:1180px;margin:auto}
+.eyebrow{font-size:12px;letter-spacing:.13em;text-transform:uppercase;opacity:.8;font-weight:700}
+h1{font-size:clamp(34px,5vw,62px);line-height:1.04;margin:12px 0 18px;max-width:980px}
+.lede{font-size:19px;max-width:940px;color:#d9e8f6}
+.pin-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.pin{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 11px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+main{max-width:1180px;margin:-28px auto 70px;padding:0 22px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:28px;margin:22px 0}
+h2{font-size:28px;line-height:1.18;margin:0 0 18px} h3{font-size:21px;margin:28px 0 12px} h4{font-size:16px;margin:0 0 12px}
+.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.summary-item{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--wash)}
+.summary-item strong{display:block;font-size:16px;margin-bottom:7px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
+.metric{padding:18px;border-radius:14px;border:1px solid var(--line);background:var(--paper)}
+.metric .value{font-size:32px;font-weight:800;line-height:1} .metric .label{color:var(--muted);margin-top:7px}
+.callout{border-left:5px solid var(--teal);padding:16px 18px;background:color-mix(in srgb,var(--teal) 9%,var(--paper));border-radius:0 12px 12px 0;margin:18px 0}
+.warning{border-left-color:var(--amber);background:color-mix(in srgb,var(--amber) 9%,var(--paper))}
+.bar-row{display:grid;grid-template-columns:minmax(240px,2.1fr) minmax(220px,3fr) 54px;gap:12px;align-items:center;margin:10px 0}
+.bar-label{display:flex;align-items:center;gap:9px;font-weight:650}
+.rank{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:50%;background:var(--navy);color:white;font-size:12px}
+.bar-track{height:12px;border-radius:99px;background:#e2e8f0;overflow:hidden} .bar-track span{display:block;height:100%;border-radius:99px}
+.bar-value{font-weight:800;text-align:right}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:11px;border-right:1px solid rgba(255,255,255,.15);z-index:1}
+td{padding:11px;vertical-align:top;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+th:first-child,td:first-child{border-left:1px solid var(--line)} tr:hover td{background:color-mix(in srgb,var(--blue) 4%,var(--paper))}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted);font-size:12px}
+.table-wrap{overflow:auto;border-radius:13px;border:1px solid var(--line)}
+.table-wrap table{border:0} .table-wrap td:first-child,.table-wrap th:first-child{border-left:0}
+.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:750}
+.pill.adopt{background:#dcfce7;color:#14532d} .pill.watch{background:#fef3c7;color:#78350f}
+.score-cell{font-weight:800;white-space:nowrap}
+.score-cell::before{content:"";display:inline-block;width:54px;height:7px;background:linear-gradient(90deg,var(--score-color) calc(var(--score)*1%),#e2e8f0 0);border-radius:99px;margin-right:8px}
+.criteria-table td:nth-child(2){font-size:18px;font-weight:800}
+.mini-bar{height:9px;background:#e2e8f0;border-radius:99px;overflow:hidden} .mini-bar span{display:block;height:100%;background:var(--teal)}
+.scenario-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.scenario-card{border:1px solid var(--line);border-radius:14px;padding:15px;background:var(--wash)}
+.scenario-card ol{margin:0;padding-left:21px} .scenario-card li{margin:8px 0;padding-left:3px}
+.scenario-card li span{display:inline-block;width:calc(100% - 45px);vertical-align:top} .scenario-card li strong{float:right}
+.arch{display:grid;grid-template-columns:1fr;gap:11px;max-width:850px;margin:22px auto}
+.arch .layer{border:1px solid var(--line);border-radius:14px;padding:17px;text-align:center;background:var(--paper)}
+.arch .proofs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.arch .proofs span{padding:11px;border-radius:10px;background:color-mix(in srgb,var(--blue) 8%,var(--paper));border:1px solid var(--line);font-weight:650}
+.arrow{text-align:center;font-size:26px;color:var(--teal);height:24px}
+.agree-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.agree-grid section{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--wash)}
+.agree-grid ul{padding-left:20px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.controls button{border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:7px 11px;border-radius:999px;cursor:pointer}
+.controls button.active{background:var(--navy);color:white}
+.phase{display:inline-block;background:var(--navy);color:white;border-radius:7px;padding:4px 7px;font-weight:750}
+.source-list{columns:2;column-gap:28px;padding-left:22px} .source-list li{break-inside:avoid;margin:0 0 17px}
+.source-list span{display:block;color:var(--muted);font-size:12px} .source-list p{margin:3px 0 0;font-size:12px}
+footer{max-width:1180px;margin:0 auto 50px;padding:0 22px;color:var(--muted);font-size:12px}
+@media(max-width:900px){.summary-grid,.metric-grid{grid-template-columns:1fr 1fr}.scenario-grid{grid-template-columns:1fr 1fr}.arch .proofs{grid-template-columns:1fr 1fr}.agree-grid{grid-template-columns:1fr}.source-list{columns:1}}
+@media(max-width:580px){header{padding:42px 18px}main{padding:0 12px}.card{padding:19px}.summary-grid,.metric-grid,.scenario-grid{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr 52px}.bar-track{grid-column:1/3}}
+@media print{body{background:white;color:#0b1f33}header{padding:30px;background:#0b1f33}main{margin:0 auto}.card{box-shadow:none;break-inside:avoid}.controls{display:none}th{position:static}a{color:#0b1f33}}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="eyebrow">Decision report · Saaty AHP · 2026-07-19</div>
+    <h1>Identity API Authentication &amp; Linking Options</h1>
+    <p class="lede">A portfolio decision for near-zero-friction wallet authentication and near-term Discord, Telegram, and wallet linking—without surrendering identity-api's platform- and chain-agnostic source-of-record role.</p>
+    <div class="pin-row">
+      <span class="pin">identity-api 6908a76f45f1</span>
+      <span class="pin">loa-aleph 5472292fd2cb</span>
+      <span class="pin">construct-dynamic-auth 752f4adc7bc2</span>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="card">
+    <h2>Executive Summary</h2>
+    <div class="summary-grid">
+      <div class="summary-item"><strong>Build the broker, buy only accelerators.</strong>Identity-api should own immutable credential links, collisions, sessions, and token issuance. Providers and wallet kits should remain adapters.</div>
+      <div class="summary-item"><strong>Ship Telegram and Discord first.</strong>Official Telegram OIDC and mature Discord OAuth rank immediately behind the core foundation and remain near the top in every sensitivity scenario.</div>
+      <div class="summary-item"><strong>Use Reown for wallet UX, CAIP for the model.</strong>Reown is the best practical connector-level prompt reducer; CAIP-2/10/122 and CACAO-style proofs preserve chain neutrality underneath it.</div>
+      <div class="summary-item"><strong>Add passkeys after identity is established.</strong>Passkeys are the strongest returning login and recovery credential, but they complement rather than replace wallet/chat acquisition.</div>
+    </div>
+    <div class="metric-grid">
+      <div class="metric"><div class="value">91.0</div><div class="label">Top AHP score: native identity-api broker + durable session</div></div>
+      <div class="metric"><div class="value">0.005</div><div class="label">AHP consistency ratio; below the 0.10 review threshold</div></div>
+      <div class="metric"><div class="value">#2–4</div><div class="label">Telegram OIDC rank across all five sensitivity scenarios</div></div>
+      <div class="metric"><div class="value">#8–9</div><div class="label">Reown rank stability across all scenarios</div></div>
+    </div>
+    <div class="callout"><strong>Decision:</strong> Build one provider-neutral credential broker and durable session in identity-api; adopt Telegram OIDC, Discord OAuth, and guarded bot-linking; make Reown SIWX/One-Click the preferred wallet route with SIWE fallback; add passkeys next; keep managed vendors behind reversible ports.</div>
+  </section>
+
+  <section class="card">
+    <h2>Why the model favors a portfolio, not one vendor</h2>
+    <p>These options operate at different layers. OAuth/OIDC proves a Discord or Telegram subject; SIWX proves a chain account; Reown improves wallet transport; passkeys improve return authentication; managed wallet vendors can create keys and UX. None of those should decide canonical identity linkage by itself.</p>
+    <div class="arch">
+      <div class="layer proofs">
+        <span>Discord OAuth</span><span>Telegram OIDC / Mini App</span><span>Bot link code</span><span>SIWX / wallet proof</span><span>Passkey</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="layer"><strong>Credential adapters</strong><br><span class="muted">Normalize provider, issuer, subject, proof type, verification result, source evidence, and policy context.</span></div>
+      <div class="arrow">↓</div>
+      <div class="layer"><strong>identity-api canonical user + link ledger</strong><br><span class="muted">Own collisions, transfers, revocation, provenance, world mappings, and merge authority.</span></div>
+      <div class="arrow">↓</div>
+      <div class="layer"><strong>Durable session + audience-specific tokens</strong><br><span class="muted">Returning users resume with zero wallet prompts; apps and bots consume a stable identity contract.</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>AHP criteria and weights</h2>
+    <p>The pairwise judgments deliberately prioritize the user's stated near-term channels and the ratified architecture. Security, chain neutrality, and friction are co-equal load-bearing criteria. Maturity, implementation speed, sovereignty, and session continuity remain material; operational burden and commercial TCO are lower-weight because they are more reversible than an identity or security mistake.</p>
+    <div class="table-wrap">
+      <table class="criteria-table">
+        <thead><tr><th>Criterion</th><th>Weight</th><th>Relative weight</th></tr></thead>
+        <tbody>
+    <tr>
+      <td><strong>Near-term channel fit</strong><br><span class="muted">Direct contribution to wallet connect/auth plus Discord and Telegram linking in the next implementation cycle.</span></td>
+      <td class="num">16.2%</td>
+      <td><div class="mini-bar"><span style="width:95.5%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>identity-api architecture fit</strong><br><span class="muted">Preserves identity-api as canonical identity source of record and issuer, with credentials entering through adapters.</span></td>
+      <td class="num">15.9%</td>
+      <td><div class="mini-bar"><span style="width:93.4%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Chain/platform agnosticism</strong><br><span class="muted">Works across wallet namespaces, chains, browsers, native apps, bots, and non-wallet identities without distorting the core model.</span></td>
+      <td class="num">13.1%</td>
+      <td><div class="mini-bar"><span style="width:77.2%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>User friction reduction</strong><br><span class="muted">Reduces connector prompts, redirects, repeat sign-ins, recovery friction, and cross-device effort.</span></td>
+      <td class="num">13.1%</td>
+      <td><div class="mini-bar"><span style="width:77.2%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Security/linking assurance</strong><br><span class="muted">Strength of proof, replay resistance, session binding, collision policy, phishing resistance, and account-takeover defenses.</span></td>
+      <td class="num">13.1%</td>
+      <td><div class="mini-bar"><span style="width:77.2%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Maturity/interoperability</strong><br><span class="muted">Standards status, provider support, operational precedent, library quality, and portability between implementations.</span></td>
+      <td class="num">6.2%</td>
+      <td><div class="mini-bar"><span style="width:36.6%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Time to production</strong><br><span class="muted">How quickly the option can be safely shipped with the current stack and team.</span></td>
+      <td class="num">6.2%</td>
+      <td><div class="mini-bar"><span style="width:36.6%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Sovereignty/exit</strong><br><span class="muted">Control of canonical data and keys, self-hosting, auditable source, replaceability, and vendor exit.</span></td>
+      <td class="num">6.2%</td>
+      <td><div class="mini-bar"><span style="width:36.6%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Session/SSO continuity</strong><br><span class="muted">Ability to resume without repeated wallet/social prompts across reloads, apps, and devices.</span></td>
+      <td class="num">6.2%</td>
+      <td><div class="mini-bar"><span style="width:36.6%"></span></div></td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Operational burden/TCO</strong><br><span class="muted">Combined reliability, operational complexity, recurring commercial cost, and incident blast radius.</span></td>
+      <td class="num">3.6%</td>
+      <td><div class="mini-bar"><span style="width:21.2%"></span></div></td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+    <div class="callout warning"><strong>Method:</strong> Saaty geometric-mean weighting with a 10×10 reciprocal matrix. Option ratings use an absolute 1/3/5/7/9 scale; final score = (weighted mean − 1) / 8 × 100. CR = 0.0051. The workbook exposes every pairwise judgment, rating, formula, and scenario weight.</div>
+  </section>
+
+  <section class="card">
+    <h2>Base ranking</h2>
+    <p>The top six are mostly complementary components. Privy and Dynamic appear high because they are very fast and polished, not because they are the preferred canonical architecture.</p>
+    
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">1</span>Native identity-api broker + durable session</div>
+      <div class="bar-track"><span style="width:91.0%;background:#15803D"></span></div>
+      <div class="bar-value">91.0</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">2</span>Telegram OIDC linking</div>
+      <div class="bar-track"><span style="width:89.9%;background:#15803D"></span></div>
+      <div class="bar-value">89.9</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">3</span>Discord OAuth2 linking</div>
+      <div class="bar-track"><span style="width:89.0%;background:#15803D"></span></div>
+      <div class="bar-value">89.0</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">4</span>Discord/Telegram bot deep-link + one-time code</div>
+      <div class="bar-track"><span style="width:88.2%;background:#15803D"></span></div>
+      <div class="bar-value">88.2</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">5</span>Native WebAuthn/passkey adapter</div>
+      <div class="bar-track"><span style="width:87.4%;background:#15803D"></span></div>
+      <div class="bar-value">87.4</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">6</span>Telegram Mini App initData</div>
+      <div class="bar-track"><span style="width:86.4%;background:#0F766E"></span></div>
+      <div class="bar-value">86.4</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">7</span>Privy</div>
+      <div class="bar-track"><span style="width:85.3%;background:#0F766E"></span></div>
+      <div class="bar-value">85.3</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">8</span>Dynamic</div>
+      <div class="bar-track"><span style="width:83.7%;background:#0F766E"></span></div>
+      <div class="bar-value">83.7</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">9</span>Reown SIWX + One-Click Auth</div>
+      <div class="bar-track"><span style="width:83.5%;background:#0F766E"></span></div>
+      <div class="bar-value">83.5</div>
+    </div>
+    
+
+    <div class="bar-row">
+      <div class="bar-label"><span class="rank">10</span>Better Auth as credential-adapter plane</div>
+      <div class="bar-track"><span style="width:83.4%;background:#0F766E"></span></div>
+      <div class="bar-value">83.4</div>
+    </div>
+    
+  </section>
+
+  <section class="card">
+    <h2>All options</h2>
+    <div class="controls" id="lane-controls"><button class="active" data-lane="all">All</button></div>
+    <div class="table-wrap">
+      <table id="options-table">
+        <thead><tr><th>#</th><th>Option and applicability</th><th>Lane</th><th>Recommendation</th><th>Score</th><th>Scenario rank</th><th>Main tradeoff</th><th>Evidence</th></tr></thead>
+        <tbody>
+    <tr data-lane="Foundation" data-score="91.028">
+      <td class="num">1</td>
+      <td><strong>Native identity-api broker + durable session</strong><br><span class="muted">The canonical credential-link ledger, link-intent state machine, collision policy, session resume, and audience-specific token issuance belong here.</span></td>
+      <td>Foundation</td>
+      <td><span class="pill adopt">ADOPT — platform baseline</span></td>
+      <td class="num score-cell" style="--score:91.0;--score-color:#15803D">91.0</td>
+      <td class="num">1–8</td>
+      <td>Highest build burden, but every other option becomes replaceable and composable instead of becoming a second source of truth.</td>
+      <td>
+        <a href="https://github.com/0xHoneyJar/identity-api/blob/6908a76f45f1004d26f6b16309c15fc793f744db/grimoires/loa/2026-06-01-auth-decision-reconciled.md">INT-1</a><br>
+        <a href="https://datatracker.ietf.org/doc/rfc9700/">SEC-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Chat/social" data-score="89.897">
+      <td class="num">2</td>
+      <td><strong>Telegram OIDC linking</strong><br><span class="muted">Official OIDC authorization-code adapter gives Telegram parity with Discord while preserving provider-neutral subjects and proof records.</span></td>
+      <td>Chat/social</td>
+      <td><span class="pill adopt">ADOPT</span></td>
+      <td class="num score-cell" style="--score:89.9;--score-color:#15803D">89.9</td>
+      <td class="num">2–4</td>
+      <td>Newer ecosystem path; implementation must validate discovery/JWKS, issuer, audience, expiry, nonce/state, and PKCE.</td>
+      <td>
+        <a href="https://core.telegram.org/bots/telegram-login">SOC-1</a><br>
+        <a href="https://datatracker.ietf.org/doc/rfc9700/">SEC-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Chat/social" data-score="89.012">
+      <td class="num">3</td>
+      <td><strong>Discord OAuth2 linking</strong><br><span class="muted">Direct near-term credential adapter keyed by immutable Discord issuer + subject; use identify-only scope first.</span></td>
+      <td>Chat/social</td>
+      <td><span class="pill adopt">ADOPT</span></td>
+      <td class="num score-cell" style="--score:89.0;--score-color:#15803D">89.0</td>
+      <td class="num">2–7</td>
+      <td>OAuth linking must be bound to the initiating identity-api session and provider/client context; no username or email merging.</td>
+      <td>
+        <a href="https://docs.discord.com/developers/topics/oauth2">SOC-4</a><br>
+        <a href="https://docs.discord.com/developers/platform/account-linking">SOC-5</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Chat-native" data-score="88.197">
+      <td class="num">4</td>
+      <td><strong>Discord/Telegram bot deep-link + one-time code</strong><br><span class="muted">Best chat-native bridge for linking a bot interaction to an authenticated web identity or starting a link from Discord/Telegram.</span></td>
+      <td>Chat-native</td>
+      <td><span class="pill adopt">ADOPT with cross-device guardrails</span></td>
+      <td class="num score-cell" style="--score:88.2;--score-color:#15803D">88.2</td>
+      <td class="num">4–11</td>
+      <td>Cross-device links are phishing/session-fixation targets; codes must be unique, short-lived, single-use, context-bound, and visibly confirmed.</td>
+      <td>
+        <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/16/">SEC-3</a><br>
+        <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-security-topics-update/">SEC-2</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Credential" data-score="87.416">
+      <td class="num">5</td>
+      <td><strong>Native WebAuthn/passkey adapter</strong><br><span class="muted">Best returning-user login and recovery credential once wallet, Discord, or Telegram has established the canonical user.</span></td>
+      <td>Credential</td>
+      <td><span class="pill adopt">ADOPT after first verified credential</span></td>
+      <td class="num score-cell" style="--score:87.4;--score-color:#15803D">87.4</td>
+      <td class="num">2–13</td>
+      <td>Requires RP-ID/origin planning and recovery policy; synced passkeys optimize availability while device-bound authenticators offer stronger isolation.</td>
+      <td>
+        <a href="https://www.w3.org/TR/webauthn-3/">PASS-1</a><br>
+        <a href="https://pages.nist.gov/800-63-4/sp800-63b/syncable/">PASS-2</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Chat/social" data-score="86.355">
+      <td class="num">6</td>
+      <td><strong>Telegram Mini App initData</strong><br><span class="muted">Lowest-friction way to establish Telegram identity inside a Mini App and then link or resume the canonical identity-api user.</span></td>
+      <td>Chat/social</td>
+      <td><span class="pill adopt">ADOPT for Mini App surfaces</span></td>
+      <td class="num score-cell" style="--score:86.4;--score-color:#0F766E">86.4</td>
+      <td class="num">6–8</td>
+      <td>Only valid in the Telegram-hosted surface; requires strict server validation, freshness bounds, replay controls, and explicit linkage policy.</td>
+      <td>
+        <a href="https://core.telegram.org/bots/webapps">SOC-3</a><br>
+        <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/16/">SEC-3</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="85.298">
+      <td class="num">7</td>
+      <td><strong>Privy</strong><br><span class="muted">Broadest managed coverage of Discord, Telegram, passkeys, external wallets, SIWE/SIWS, and embedded wallets in one product.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">BEST buy candidate if activation speed dominates</span></td>
+      <td class="num score-cell" style="--score:85.3;--score-color:#0F766E">85.3</td>
+      <td class="num">1–11</td>
+      <td>Strongest shortcut also creates the strongest risk of an external common-user object becoming the real identity authority.</td>
+      <td>
+        <a href="https://docs.privy.io/authentication/user-authentication/privy-auth">VND-1</a><br>
+        <a href="https://docs.privy.io/wallets/overview/embedded">VND-2</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="83.658">
+      <td class="num">8</td>
+      <td><strong>Dynamic</strong><br><span class="muted">Fast multi-wallet/social onboarding and existing ecosystem precedent; useful as a migration source or temporary credential provider.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">TRANSITION benchmark — do not deepen SoR dependency</span></td>
+      <td class="num score-cell" style="--score:83.7;--score-color:#0F766E">83.7</td>
+      <td class="num">2–14</td>
+      <td>Conflicts with the ratified identity-api SoR direction if its user/session model remains canonical.</td>
+      <td>
+        <a href="https://github.com/0xHoneyJar/identity-api/blob/6908a76f45f1004d26f6b16309c15fc793f744db/grimoires/loa/2026-06-01-auth-decision-reconciled.md">INT-1</a><br>
+        <a href="https://docs.dynamic.xyz/headless/headless-wallet-management">VND-3</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Wallet UX" data-score="83.547">
+      <td class="num">9</td>
+      <td><strong>Reown SIWX + One-Click Auth</strong><br><span class="muted">Pragmatic way to reduce wallet connector approvals while keeping identity-api as nonce, verifier, user, and session authority.</span></td>
+      <td>Wallet UX</td>
+      <td><span class="pill adopt">ADOPT — preferred wallet transport</span></td>
+      <td class="num score-cell" style="--score:83.5;--score-color:#0F766E">83.5</td>
+      <td class="num">8–9</td>
+      <td>One-Click Auth coverage is capability- and wallet-dependent; the practical implementation is strongest on EVM, so legacy and non-EVM fallbacks remain necessary.</td>
+      <td>
+        <a href="https://docs.reown.com/appkit/authentication/one-click-auth">WAL-5</a><br>
+        <a href="https://docs.reown.com/appkit/react-native/core/siwx">WAL-6</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Foundation" data-score="83.403">
+      <td class="num">10</td>
+      <td><strong>Better Auth as credential-adapter plane</strong><br><span class="muted">Useful implementation substrate for OIDC/social/passkey UX behind identity-api&#x27;s CredentialBridge and proof-normalization contract.</span></td>
+      <td>Foundation</td>
+      <td><span class="pill adopt">ADOPT narrowly — never SoR/issuer</span></td>
+      <td class="num score-cell" style="--score:83.4;--score-color:#0F766E">83.4</td>
+      <td class="num">6–12</td>
+      <td>Its native user/account/session model must not silently become the canonical identity plane already owned by identity-api.</td>
+      <td>
+        <a href="https://github.com/0xHoneyJar/identity-api/blob/6908a76f45f1004d26f6b16309c15fc793f744db/grimoires/loa/2026-06-01-auth-decision-reconciled.md">INT-1</a><br>
+        <a href="https://www.better-auth.com/docs/plugins/generic-oauth">AUT-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="81.216">
+      <td class="num">11</td>
+      <td><strong>MetaMask Embedded Wallets/Web3Auth</strong><br><span class="muted">Broad chain support, Discord OAuth, external wallets, and custom JWT/OIDC make it compatible with identity-api as upstream identity.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">CONDITIONAL — BYO JWT + embedded wallet</span></td>
+      <td class="num score-cell" style="--score:81.2;--score-color:#0F766E">81.2</td>
+      <td class="num">6–13</td>
+      <td>Telegram still needs a separate adapter and the threshold-key network becomes another critical dependency.</td>
+      <td>
+        <a href="https://docs.metamask.io/embedded-wallets/authentication/">VND-7</a><br>
+        <a href="https://docs.metamask.io/embedded-wallets/architecture/">VND-8</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="80.828">
+      <td class="num">12</td>
+      <td><strong>Coinbase CDP Embedded Wallets</strong><br><span class="muted">Strong Telegram, SIWE, OTP/social, device binding, and auth-method linking for embedded-wallet products.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">CONDITIONAL — Telegram + wallet-centric products</span></td>
+      <td class="num score-cell" style="--score:80.8;--score-color:#0F766E">80.8</td>
+      <td class="num">3–16</td>
+      <td>No comparable native Discord emphasis in the current product surface and a wallet-account model that can compete with identity-api.</td>
+      <td>
+        <a href="https://docs.cdp.coinbase.com/wallets/authentication/overview">VND-5</a><br>
+        <a href="https://docs.cdp.coinbase.com/wallets/authentication/auth-method-linking">VND-6</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Wallet standard" data-score="79.879">
+      <td class="num">13</td>
+      <td><strong>CAIP-122 SIWx + CAIP-196 CACAO</strong><br><span class="muted">Best fit for chain-neutral account identifiers and a provider-neutral signed-proof envelope inside identity-api.</span></td>
+      <td>Wallet standard</td>
+      <td><span class="pill adopt">ADOPT as internal proof vocabulary</span></td>
+      <td class="num score-cell" style="--score:79.9;--score-color:#1D4ED8">79.9</td>
+      <td class="num">7–16</td>
+      <td>The standards are not themselves a wallet transport or turnkey UX and remain less deployed than SIWE.</td>
+      <td>
+        <a href="https://standards.chainagnostic.org/CAIPs/caip-122">WAL-1</a><br>
+        <a href="https://standards.chainagnostic.org/CAIPs/caip-196">WAL-2</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="76.400">
+      <td class="num">14</td>
+      <td><strong>thirdweb In-App Wallets</strong><br><span class="muted">Fast social/passkey/Discord and embedded-wallet onboarding with strong transaction abstractions.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">CONDITIONAL — app-specific acceleration</span></td>
+      <td class="num score-cell" style="--score:76.4;--score-color:#1D4ED8">76.4</td>
+      <td class="num">4–20</td>
+      <td>No first-class Telegram fit in the reviewed surface and a broad product footprint that can increase lock-in.</td>
+      <td>
+        <a href="https://thirdweb.com/wallets">VND-10</a><br>
+        <a href="https://datatracker.ietf.org/doc/rfc9700/">SEC-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Emerging wallet" data-score="75.970">
+      <td class="num">15</td>
+      <td><strong>CAIP-222 wallet_authenticate</strong><br><span class="muted">Architecturally closest chain-neutral answer to authenticating before an account has been separately exposed.</span></td>
+      <td>Emerging wallet</td>
+      <td><span class="pill watch">PILOT behind capability detection</span></td>
+      <td class="num score-cell" style="--score:76.0;--score-color:#1D4ED8">76.0</td>
+      <td class="num">10–19</td>
+      <td>Excellent interface shape but insufficient broad wallet support for a production baseline.</td>
+      <td>
+        <a href="https://standards.chainagnostic.org/CAIPs/caip-222">WAL-3</a><br>
+        <a href="https://standards.chainagnostic.org/CAIPs/caip-122">WAL-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="75.044">
+      <td class="num">16</td>
+      <td><strong>Turnkey</strong><br><span class="muted">Strongest managed security/policy option when identity-api needs downstream embedded wallets or agent wallets without outsourcing identity.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">CONDITIONAL — wallet/key infrastructure only</span></td>
+      <td class="num score-cell" style="--score:75.0;--score-color:#1D4ED8">75.0</td>
+      <td class="num">14–16</td>
+      <td>Does not solve Discord/Telegram linking by itself and introduces enclave, sub-organization, policy, and vendor operating models.</td>
+      <td>
+        <a href="https://docs.turnkey.com/solutions/embedded-wallets/overview">VND-9</a><br>
+        <a href="https://www.w3.org/TR/webauthn-3/">PASS-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Foundation" data-score="74.472">
+      <td class="num">17</td>
+      <td><strong>Keycloak/Ory external OIDC broker</strong><br><span class="muted">Mature standards broker if external enterprise IdPs, workforce federation, or policy administration become dominant requirements.</span></td>
+      <td>Foundation</td>
+      <td><span class="pill watch">CONTINGENCY — enterprise federation</span></td>
+      <td class="num score-cell" style="--score:74.5;--score-color:#1D4ED8">74.5</td>
+      <td class="num">8–17</td>
+      <td>Adds another stateful identity runtime and still leaves wallet/chat-specific linking semantics to identity-api.</td>
+      <td>
+        <a href="https://www.keycloak.org/documentation">AUT-3</a><br>
+        <a href="https://www.ory.sh/docs">AUT-4</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Delegated wallet" data-score="71.376">
+      <td class="num">18</td>
+      <td><strong>WalletConnect Identity Keys + ReCaps</strong><br><span class="muted">Can authorize a device/account-specific identity key and scoped capabilities, reducing repeated wallet-key prompts for advanced flows.</span></td>
+      <td>Delegated wallet</td>
+      <td><span class="pill watch">PILOT only when repeated delegation is needed</span></td>
+      <td class="num score-cell" style="--score:71.4;--score-color:#B45309">71.4</td>
+      <td class="num">17–20</td>
+      <td>Material protocol, key-lifecycle, revocation, and policy complexity before a concrete delegated-action use case exists.</td>
+      <td>
+        <a href="https://specs.walletconnect.com/2.0/specs/clients/core/identity/identity-keys">WAL-9</a><br>
+        <a href="https://specs.walletconnect.com/2.0/specs/clients/sign/wallet-authentication">WAL-10</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Wallet fallback" data-score="69.089">
+      <td class="num">19</td>
+      <td><strong>Legacy SIWE + connector orchestration</strong><br><span class="muted">Reliable fallback for wallets that lack combined authentication and for existing consumers already built around SIWE.</span></td>
+      <td>Wallet fallback</td>
+      <td><span class="pill adopt">RETAIN as universal EVM fallback</span></td>
+      <td class="num score-cell" style="--score:69.1;--score-color:#B45309">69.1</td>
+      <td class="num">16–20</td>
+      <td>EVM-specific and usually retains separate connect and sign wallet approvals on first use.</td>
+      <td>
+        <a href="https://eips.ethereum.org/EIPS/eip-4361">WAL-4</a><br>
+        <a href="https://datatracker.ietf.org/doc/rfc9700/">SEC-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Managed vendor" data-score="67.029">
+      <td class="num">20</td>
+      <td><strong>Base Account</strong><br><span class="muted">Excellent passkey-backed one-tap experience for supported EVM applications and payments.</span></td>
+      <td>Managed vendor</td>
+      <td><span class="pill watch">OPTIONAL EVM lane — not platform default</span></td>
+      <td class="num score-cell" style="--score:67.0;--score-color:#B45309">67.0</td>
+      <td class="num">14–22</td>
+      <td>Base/EVM-centered identity/account semantics conflict with identity-api&#x27;s inherent cross-chain and non-wallet scope.</td>
+      <td>
+        <a href="https://docs.base.org/base-account/overview/what-is-base-account">VND-11</a><br>
+        <a href="https://www.w3.org/TR/webauthn-3/">PASS-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Chat/social legacy" data-score="65.307">
+      <td class="num">21</td>
+      <td><strong>Legacy Telegram Login Widget</strong><br><span class="muted">May be retained temporarily where migration cost is material.</span></td>
+      <td>Chat/social legacy</td>
+      <td><span class="pill watch">MIGRATE / avoid new adoption</span></td>
+      <td class="num score-cell" style="--score:65.3;--score-color:#B45309">65.3</td>
+      <td class="num">19–22</td>
+      <td>Superseded by the official OIDC path and less aligned with a uniform OAuth/OIDC linking state machine.</td>
+      <td>
+        <a href="https://core.telegram.org/widgets/login-legacy">SOC-2</a><br>
+        <a href="https://core.telegram.org/bots/telegram-login">SOC-1</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Emerging wallet" data-score="63.341">
+      <td class="num">22</td>
+      <td><strong>ERC-7846 wallet_connect + SIWE</strong><br><span class="muted">Useful capability-detected EVM route to one combined connector interaction.</span></td>
+      <td>Emerging wallet</td>
+      <td><span class="pill watch">WATCH / EVM pilot</span></td>
+      <td class="num score-cell" style="--score:63.3;--score-color:#B91C1C">63.3</td>
+      <td class="num">21–22</td>
+      <td>Draft, EVM-only, and overlaps with competing wallet-authentication interfaces.</td>
+      <td>
+        <a href="https://ercs.ethereum.org/ERCS/erc-7846">WAL-7</a><br>
+        <a href="https://eips.ethereum.org/EIPS/eip-4361">WAL-4</a>
+      </td>
+    </tr>
+    
+
+    <tr data-lane="Future wallet" data-score="57.992">
+      <td class="num">23</td>
+      <td><strong>ERC-8019 trusted automatic SIWE</strong><br><span class="muted">Potential future zero-prompt reauthentication after a user grants an exact wallet-managed trust policy.</span></td>
+      <td>Future wallet</td>
+      <td><span class="pill watch">WATCH — do not baseline</span></td>
+      <td class="num score-cell" style="--score:58.0;--score-color:#B91C1C">58.0</td>
+      <td class="num">23–23</td>
+      <td>Review-stage proposal with no reliable wallet coverage and open product/security questions around policy management and auto-signing.</td>
+      <td>
+        <a href="https://raw.githubusercontent.com/ethereum/ERCs/master/ERCS/erc-8019.md">WAL-8</a><br>
+        <a href="https://eips.ethereum.org/EIPS/eip-4361">WAL-4</a>
+      </td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Telegram and Discord should lead the near-term build</h2>
+    <p>Telegram's official OIDC authorization-code path makes it possible to implement Telegram and Discord through the same provider-neutral transaction and proof model. Mini App initData and bot codes remain valuable channel-native paths, but they should feed the same link ledger and security policy.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Option</th><th>Score</th><th>Decision</th><th>Best use</th><th>Guardrail / limitation</th></tr></thead>
+        <tbody>
+    <tr>
+      <td><strong>Telegram OIDC linking</strong></td>
+      <td class="num">89.9</td>
+      <td>ADOPT</td>
+      <td>Official OIDC authorization-code adapter gives Telegram parity with Discord while preserving provider-neutral subjects and proof records.</td>
+      <td>Newer ecosystem path; implementation must validate discovery/JWKS, issuer, audience, expiry, nonce/state, and PKCE.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Discord OAuth2 linking</strong></td>
+      <td class="num">89.0</td>
+      <td>ADOPT</td>
+      <td>Direct near-term credential adapter keyed by immutable Discord issuer + subject; use identify-only scope first.</td>
+      <td>OAuth linking must be bound to the initiating identity-api session and provider/client context; no username or email merging.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Discord/Telegram bot deep-link + one-time code</strong></td>
+      <td class="num">88.2</td>
+      <td>ADOPT with cross-device guardrails</td>
+      <td>Best chat-native bridge for linking a bot interaction to an authenticated web identity or starting a link from Discord/Telegram.</td>
+      <td>Cross-device links are phishing/session-fixation targets; codes must be unique, short-lived, single-use, context-bound, and visibly confirmed.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Telegram Mini App initData</strong></td>
+      <td class="num">86.4</td>
+      <td>ADOPT for Mini App surfaces</td>
+      <td>Lowest-friction way to establish Telegram identity inside a Mini App and then link or resume the canonical identity-api user.</td>
+      <td>Only valid in the Telegram-hosted surface; requires strict server validation, freshness bounds, replay controls, and explicit linkage policy.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Legacy Telegram Login Widget</strong></td>
+      <td class="num">65.3</td>
+      <td>MIGRATE / avoid new adoption</td>
+      <td>May be retained temporarily where migration cost is material.</td>
+      <td>Superseded by the official OIDC path and less aligned with a uniform OAuth/OIDC linking state machine.</td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+    <div class="callout warning"><strong>2026 security update:</strong> PKCE does not, by itself, stop cross-user OAuth session fixation. The callback must prove that the identity-api user and provider/toolkit/client context that started the link are the same ones completing it. Bot and cross-device flows need the same invariant plus short-lived, single-use codes and visible confirmation.</div>
+  </section>
+
+  <section class="card">
+    <h2>Wallet strategy: practical transport over a chain-neutral proof model</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Option</th><th>Score</th><th>Decision</th><th>Horizon</th><th>Main tradeoff</th></tr></thead>
+        <tbody>
+    <tr>
+      <td><strong>Reown SIWX + One-Click Auth</strong></td>
+      <td class="num">83.5</td>
+      <td>ADOPT — preferred wallet transport</td>
+      <td>P0</td>
+      <td>One-Click Auth coverage is capability- and wallet-dependent; the practical implementation is strongest on EVM, so legacy and non-EVM fallbacks remain necessary.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>CAIP-122 SIWx + CAIP-196 CACAO</strong></td>
+      <td class="num">79.9</td>
+      <td>ADOPT as internal proof vocabulary</td>
+      <td>P0 design / P1 runtime</td>
+      <td>The standards are not themselves a wallet transport or turnkey UX and remain less deployed than SIWE.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>CAIP-222 wallet_authenticate</strong></td>
+      <td class="num">76.0</td>
+      <td>PILOT behind capability detection</td>
+      <td>P1 / watch</td>
+      <td>Excellent interface shape but insufficient broad wallet support for a production baseline.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>WalletConnect Identity Keys + ReCaps</strong></td>
+      <td class="num">71.4</td>
+      <td>PILOT only when repeated delegation is needed</td>
+      <td>P2 / demand-driven</td>
+      <td>Material protocol, key-lifecycle, revocation, and policy complexity before a concrete delegated-action use case exists.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Legacy SIWE + connector orchestration</strong></td>
+      <td class="num">69.1</td>
+      <td>RETAIN as universal EVM fallback</td>
+      <td>P0</td>
+      <td>EVM-specific and usually retains separate connect and sign wallet approvals on first use.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>ERC-7846 wallet_connect + SIWE</strong></td>
+      <td class="num">63.3</td>
+      <td>WATCH / EVM pilot</td>
+      <td>P1 / watch</td>
+      <td>Draft, EVM-only, and overlaps with competing wallet-authentication interfaces.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>ERC-8019 trusted automatic SIWE</strong></td>
+      <td class="num">58.0</td>
+      <td>WATCH — do not baseline</td>
+      <td>Future</td>
+      <td>Review-stage proposal with no reliable wallet coverage and open product/security questions around policy management and auto-signing.</td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+    <p><strong>Recommended ladder:</strong> resume a valid identity-api session first; otherwise create an addressless AuthIntent; use Reown One-Click/SIWX where the wallet supports it; capability-detect CAIP-222 or ERC-7846 experiments; fall back to conventional SIWE. ERC-8019 remains a watch item for future wallet-managed zero-prompt policies.</p>
+  </section>
+
+  <section class="card">
+    <h2>Managed accelerators: excellent UX, conditional architecture</h2>
+    <p>Managed platforms are credible buy options for embedded wallets or accelerated onboarding. Their main risk is not feature weakness; it is allowing their common-user or wallet-account object to become the de facto canonical identity above identity-api.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Vendor option</th><th>Score</th><th>Decision</th><th>Best fit</th><th>Main tradeoff</th></tr></thead>
+        <tbody>
+    <tr>
+      <td><strong>Privy</strong></td>
+      <td class="num">85.3</td>
+      <td>BEST buy candidate if activation speed dominates</td>
+      <td>Broadest managed coverage of Discord, Telegram, passkeys, external wallets, SIWE/SIWS, and embedded wallets in one product.</td>
+      <td>Strongest shortcut also creates the strongest risk of an external common-user object becoming the real identity authority.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Dynamic</strong></td>
+      <td class="num">83.7</td>
+      <td>TRANSITION benchmark — do not deepen SoR dependency</td>
+      <td>Fast multi-wallet/social onboarding and existing ecosystem precedent; useful as a migration source or temporary credential provider.</td>
+      <td>Conflicts with the ratified identity-api SoR direction if its user/session model remains canonical.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>MetaMask Embedded Wallets/Web3Auth</strong></td>
+      <td class="num">81.2</td>
+      <td>CONDITIONAL — BYO JWT + embedded wallet</td>
+      <td>Broad chain support, Discord OAuth, external wallets, and custom JWT/OIDC make it compatible with identity-api as upstream identity.</td>
+      <td>Telegram still needs a separate adapter and the threshold-key network becomes another critical dependency.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Coinbase CDP Embedded Wallets</strong></td>
+      <td class="num">80.8</td>
+      <td>CONDITIONAL — Telegram + wallet-centric products</td>
+      <td>Strong Telegram, SIWE, OTP/social, device binding, and auth-method linking for embedded-wallet products.</td>
+      <td>No comparable native Discord emphasis in the current product surface and a wallet-account model that can compete with identity-api.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>thirdweb In-App Wallets</strong></td>
+      <td class="num">76.4</td>
+      <td>CONDITIONAL — app-specific acceleration</td>
+      <td>Fast social/passkey/Discord and embedded-wallet onboarding with strong transaction abstractions.</td>
+      <td>No first-class Telegram fit in the reviewed surface and a broad product footprint that can increase lock-in.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Turnkey</strong></td>
+      <td class="num">75.0</td>
+      <td>CONDITIONAL — wallet/key infrastructure only</td>
+      <td>Strongest managed security/policy option when identity-api needs downstream embedded wallets or agent wallets without outsourcing identity.</td>
+      <td>Does not solve Discord/Telegram linking by itself and introduces enclave, sub-organization, policy, and vendor operating models.</td>
+    </tr>
+    
+
+    <tr>
+      <td><strong>Base Account</strong></td>
+      <td class="num">67.0</td>
+      <td>OPTIONAL EVM lane — not platform default</td>
+      <td>Excellent passkey-backed one-tap experience for supported EVM applications and payments.</td>
+      <td>Base/EVM-centered identity/account semantics conflict with identity-api&#x27;s inherent cross-chain and non-wallet scope.</td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+    <div class="callout"><strong>Buy recommendation:</strong> Privy is the broadest single managed candidate for Discord + Telegram + passkeys + wallets. Dynamic is the strongest continuity choice for the existing estate. Turnkey is strongest when the actual problem is secure embedded/agent wallet key infrastructure. None should replace the identity-api user, credential ledger, or issuer.</div>
+  </section>
+
+  <section class="card">
+    <h2>Sensitivity: what changes the answer</h2>
+    <div class="scenario-grid">
+    <div class="scenario-card">
+      <h4>Base / channel-first</h4>
+      <ol>
+        <li><span>Native identity-api broker + durable session</span><strong>91.0</strong></li><li><span>Telegram OIDC linking</span><strong>89.9</strong></li><li><span>Discord OAuth2 linking</span><strong>89.0</strong></li><li><span>Discord/Telegram bot deep-link + one-time code</span><strong>88.2</strong></li><li><span>Native WebAuthn/passkey adapter</span><strong>87.4</strong></li>
+      </ol>
+    </div>
+    
+    <div class="scenario-card">
+      <h4>Sovereignty-first</h4>
+      <ol>
+        <li><span>Native identity-api broker + durable session</span><strong>94.2</strong></li><li><span>Telegram OIDC linking</span><strong>92.4</strong></li><li><span>Discord OAuth2 linking</span><strong>91.9</strong></li><li><span>Native WebAuthn/passkey adapter</span><strong>91.3</strong></li><li><span>Discord/Telegram bot deep-link + one-time code</span><strong>90.9</strong></li>
+      </ol>
+    </div>
+    
+    <div class="scenario-card">
+      <h4>UX / activation-first</h4>
+      <ol>
+        <li><span>Privy</span><strong>94.0</strong></li><li><span>Dynamic</span><strong>93.6</strong></li><li><span>Coinbase CDP Embedded Wallets</span><strong>87.0</strong></li><li><span>Telegram OIDC linking</span><strong>85.5</strong></li><li><span>thirdweb In-App Wallets</span><strong>85.5</strong></li>
+      </ol>
+    </div>
+    
+    <div class="scenario-card">
+      <h4>Security-first</h4>
+      <ol>
+        <li><span>Native identity-api broker + durable session</span><strong>94.1</strong></li><li><span>Native WebAuthn/passkey adapter</span><strong>93.8</strong></li><li><span>Discord OAuth2 linking</span><strong>90.1</strong></li><li><span>Telegram OIDC linking</span><strong>88.6</strong></li><li><span>Discord/Telegram bot deep-link + one-time code</span><strong>86.5</strong></li>
+      </ol>
+    </div>
+    
+    <div class="scenario-card">
+      <h4>Chain-neutral-first</h4>
+      <ol>
+        <li><span>Native identity-api broker + durable session</span><strong>94.3</strong></li><li><span>Discord OAuth2 linking</span><strong>93.0</strong></li><li><span>Telegram OIDC linking</span><strong>92.8</strong></li><li><span>Discord/Telegram bot deep-link + one-time code</span><strong>92.4</strong></li><li><span>Native WebAuthn/passkey adapter</span><strong>91.3</strong></li>
+      </ol>
+    </div>
+    </div>
+    <p><strong>Robust result:</strong> the native foundation wins every scenario except the extreme activation-first weighting, where it ranks eighth and Privy/Dynamic rise to the top. Telegram OIDC remains #2–4. Reown remains #8–9 because it is consistently useful but is one layer of the solution, not the whole system.</p>
+  </section>
+
+  <section class="card">
+    <h2>What experts and standards largely agree on—and where they do not</h2>
+    <div class="agree-grid">
+      <section>
+        <h3>Broad agreement</h3>
+        <ul>
+          <li>Use immutable provider issuer + subject identifiers, not mutable handles or email, as the link key.</li>
+          <li>Use authorization code, PKCE S256, exact redirect matching, issuer/context validation, and a transaction bound to the initiating session.</li>
+          <li>Persist a server-side session so ordinary returning visits do not require another wallet signature.</li>
+          <li>Treat wallet connection and wallet authentication as distinct proofs, even when a wallet combines their UI.</li>
+          <li>Use passkeys for phishing-resistant returning authentication and account recovery after identity establishment.</li>
+          <li>Keep chain account identifiers and signed proofs versioned and namespace-aware.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Real disagreement or uncertainty</h3>
+        <ul>
+          <li><strong>Synced vs. device-bound passkeys:</strong> synced credentials improve recovery and AAL2 usability; device-bound credentials offer stronger isolation and high-assurance properties.</li>
+          <li><strong>Managed identity vs. sovereign identity:</strong> vendors optimize conversion; the cost is dependency, migration complexity, and authority ambiguity.</li>
+          <li><strong>One-click wallet standard:</strong> Reown is practical now, while CAIP-222, ERC-7846, and ERC-8019 have different scopes and uncertain wallet convergence.</li>
+          <li><strong>Bot/deep-link linking:</strong> product teams value the convenience; security guidance emphasizes session fixation, phishing, forwarding, and cross-device confirmation risk.</li>
+          <li><strong>Capabilities in login:</strong> ReCaps/identity keys are powerful, but may be premature complexity until a named consumer needs delegated actions.</li>
+        </ul>
+      </section>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Recommended implementation portfolio</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Phase</th><th>Component</th><th>Decision</th><th>Why / role</th><th>Acceptance condition</th><th>Kill / stop condition</th></tr></thead>
+        <tbody>
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Credential-link ledger</strong></td>
+      <td>Build in identity-api</td>
+      <td>Makes every provider and wallet implementation replaceable while preserving one person across channels.</td>
+      <td>Unique(provider, issuer, subject); no username/email merge; collision is an explicit hard stop.</td>
+      <td>Kill or narrow if a second canonical user store is required to make it work.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>LinkIntent / OAuth transaction state machine</strong></td>
+      <td>Build once, reuse for Discord and Telegram</td>
+      <td>The 2026 OAuth threat model shows that PKCE alone does not prevent wrong-user or wrong-toolkit linkage.</td>
+      <td>The user who starts the link must be the user who completes it; exact provider context survives every redirect.</td>
+      <td>Reject designs that carry an unauthenticated raw user_id in a deep link or callback.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Discord OAuth2 adapter</strong></td>
+      <td>Adopt</td>
+      <td>High maturity, direct near-term need, and near-zero architectural conflict.</td>
+      <td>Authorization code + PKCE where applicable; exact redirect; immutable Discord subject; identify-only scope first.</td>
+      <td>Do not auto-link by Discord username, display name, or email.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Telegram OIDC adapter</strong></td>
+      <td>Adopt</td>
+      <td>Official OIDC now provides a cleaner, standards-aligned path than the legacy widget.</td>
+      <td>S256 PKCE; validate issuer, audience, expiry, nonce/state; key by issuer+sub.</td>
+      <td>Do not start new legacy-widget integrations unless a documented platform constraint requires it.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Chat bot linking</strong></td>
+      <td>Adopt with two-sided confirmation</td>
+      <td>Most natural entry point for Discord/Telegram communities and support flows.</td>
+      <td>Unique code; very short TTL; single use; same-user binding; visible account being linked; rate limits.</td>
+      <td>Do not treat a forwarded deep link or bot message alone as sufficient identity proof.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Durable session + resume</strong></td>
+      <td>Build in identity-api</td>
+      <td>This is what makes returning authentication genuinely zero-wallet-prompt.</td>
+      <td>Reload/redeploy does not force wallet or social reauthentication inside policy lifetime.</td>
+      <td>Do not persist bearer tokens or authenticated booleans as the primary browser source of truth.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Addressless wallet AuthIntent</strong></td>
+      <td>Build in identity-api</td>
+      <td>Combined wallet authentication cannot work if the server requires an address before issuing the challenge.</td>
+      <td>Intent can be created before account exposure; recovered/verified account is bound only at completion.</td>
+      <td>Reject any one-click design that trusts a client-supplied address without proof.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Reown SIWX / One-Click preferred route</strong></td>
+      <td>Adopt with capability detection</td>
+      <td>Best practical connector-level friction reducer available now.</td>
+      <td>One combined wallet request where supported; safe automatic fallback elsewhere.</td>
+      <td>Do not make Reown&#x27;s account/session model the canonical identity record.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0</span></td>
+      <td><strong>Legacy SIWE fallback</strong></td>
+      <td>Retain</td>
+      <td>Maximizes current wallet compatibility while one-click standards mature.</td>
+      <td>Domain/URI/nonce/chain/time checks; EIP-1271/6492 as needed; clear two-step fallback UX.</td>
+      <td>Do not represent it as chain-neutral.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P0/P1</span></td>
+      <td><strong>CAIP account IDs and proof envelope</strong></td>
+      <td>Adopt internally</td>
+      <td>Prevents an EVM-first route from shaping the canonical identity schema.</td>
+      <td>CAIP-2 chain ID + CAIP-10 account ID; proof_type/version; raw evidence reference; verifier metadata.</td>
+      <td>Avoid overbuilding CACAO capability semantics until a consumer requires them.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P1</span></td>
+      <td><strong>Telegram Mini App adapter</strong></td>
+      <td>Adopt for Telegram-hosted surfaces</td>
+      <td>Best no-redirect experience inside Telegram.</td>
+      <td>Server-verifiable HMAC/signature, max age, one-time link intent, explicit collision handling.</td>
+      <td>Do not accept unvalidated client-decoded initData.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P1</span></td>
+      <td><strong>Passkey adapter</strong></td>
+      <td>Adopt after first verified credential</td>
+      <td>Best returning-user credential and a wallet-independent recovery path.</td>
+      <td>RP/origin design; user-verification policy; multiple authenticators; revocation/recovery; AAL policy.</td>
+      <td>Do not promise AAL3 with synced passkeys.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P1</span></td>
+      <td><strong>Better Auth adapter implementation</strong></td>
+      <td>Pilot</td>
+      <td>Can accelerate social/passkey work without reversing the ratified architecture.</td>
+      <td>Every Better Auth result is translated into identity-api CredentialProof before standing is granted.</td>
+      <td>Stop if two-way user/session synchronization becomes required.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P2</span></td>
+      <td><strong>Managed embedded-wallet vendor</strong></td>
+      <td>Product-specific buy decision</td>
+      <td>Useful only when a world explicitly needs embedded wallets, gas sponsorship, agent wallets, or key policies.</td>
+      <td>BYO-auth or external-user mapping, export/exit test, incident boundary, cost and SLA review.</td>
+      <td>Do not select a vendor merely to avoid implementing Discord/Telegram linking.</td>
+    </tr>
+    
+
+    <tr>
+      <td><span class="phase">P2</span></td>
+      <td><strong>Identity Keys / ReCaps</strong></td>
+      <td>Demand-driven pilot</td>
+      <td>Potentially valuable for repeated agentic or wallet actions after the simpler system is measured.</td>
+      <td>Explicit capability, expiry, revocation, device binding, and a named consumer.</td>
+      <td>Do not build without a measured repeated-signature problem.</td>
+    </tr>
+    </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Further questions that can change the decision</h2>
+    <ol>
+      <li>What percentage of near-term users enter through Telegram, Discord, an existing external wallet, or no wallet at all?</li>
+      <li>Which chains and account namespaces must be supported in the first two worlds beyond EVM?</li>
+      <li>Are embedded wallets a platform capability, or a product/world-level choice?</li>
+      <li>What assurance level is required for ordinary login, credential linking, recovery, treasury actions, and identity merges?</li>
+      <li>Can one central identity origin serve all worlds, or must unrelated domains use a top-level authorization-code/PKCE exchange?</li>
+      <li>What measured drop-off occurs at connect, sign, OAuth redirect, bot confirmation, and return-session resume?</li>
+      <li>Which commercial vendors will contractually support export, incident evidence, regional requirements, and predictable cost at projected scale?</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Caveats and assumptions</h2>
+    <ul>
+      <li>The option ratings are calibrated analyst judgments grounded in current primary documentation; they are not production conversion, latency, incident, or price measurements.</li>
+      <li>Vendor pricing, enterprise features, SLAs, and roadmap commitments require direct quotes and technical diligence.</li>
+      <li>Draft/Review wallet standards are scored for architectural promise but should remain behind stable internal interfaces and capability detection.</li>
+      <li>The matrix scores each option's contribution to the target. Complementary options can all be adopted even when their ordinal ranks differ.</li>
+      <li>The June 1 internal record described production as Dynamic-backed and identity-api as deployment-lagged; live infrastructure and current telemetry were not probed in this report.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Research anchors</h2>
+    <ol class="source-list">
+    <li id="source-INT-1">
+      <a href="https://github.com/0xHoneyJar/identity-api/blob/6908a76f45f1004d26f6b16309c15fc793f744db/grimoires/loa/2026-06-01-auth-decision-reconciled.md"><strong>INT-1 — Auth Vertical — Decision Reconciled</strong></a>
+      <span>0xHoneyJar / identity-api · Operator-ratified</span>
+      <p>Keep the sovereign identity-api issuer/SoR; Better Auth is a credential adapter, not a replacement.</p>
+    </li>
+    
+
+    <li id="source-INT-2">
+      <a href="https://github.com/0xHoneyJar/identity-api/commit/6908a76f45f1004d26f6b16309c15fc793f744db"><strong>INT-2 — identity-api default-branch pin</strong></a>
+      <span>0xHoneyJar · Current repository pin</span>
+      <p>Frozen product-repository context used for applicability scoring.</p>
+    </li>
+    
+
+    <li id="source-INT-3">
+      <a href="https://github.com/0xHoneyJar/loa-aleph/commit/5472292fd2cbd8de4bdc5ddac17406ef25009b2b"><strong>INT-3 — Loa-Aleph default-branch pin</strong></a>
+      <span>0xHoneyJar · Current repository pin</span>
+      <p>Frozen Aleph method context used for the handoff.</p>
+    </li>
+    
+
+    <li id="source-INT-4">
+      <a href="https://github.com/0xHoneyJar/construct-dynamic-auth/commit/752f4adc7bc209c603638568bfeaccb448401592"><strong>INT-4 — construct-dynamic-auth default-branch pin</strong></a>
+      <span>0xHoneyJar · Current repository pin</span>
+      <p>Existing ecosystem knowledge for wallet groups, cookie SSO, and Dynamic migration.</p>
+    </li>
+    
+
+    <li id="source-SOC-1">
+      <a href="https://core.telegram.org/bots/telegram-login"><strong>SOC-1 — Log In With Telegram — OIDC</strong></a>
+      <span>Telegram · Official current documentation</span>
+      <p>OIDC authorization-code flow, discovery/JWKS, and PKCE support for Telegram login.</p>
+    </li>
+    
+
+    <li id="source-SOC-2">
+      <a href="https://core.telegram.org/widgets/login-legacy"><strong>SOC-2 — Legacy Telegram Login Widget</strong></a>
+      <span>Telegram · Legacy / archived path</span>
+      <p>Legacy signed-widget option retained only for migration comparison.</p>
+    </li>
+    
+
+    <li id="source-SOC-3">
+      <a href="https://core.telegram.org/bots/webapps"><strong>SOC-3 — Telegram Mini Apps</strong></a>
+      <span>Telegram · Official current documentation</span>
+      <p>Mini App initData is a chat-native authenticated context that must be validated server-side.</p>
+    </li>
+    
+
+    <li id="source-SOC-4">
+      <a href="https://docs.discord.com/developers/topics/oauth2"><strong>SOC-4 — OAuth2 and Permissions</strong></a>
+      <span>Discord · Official current documentation</span>
+      <p>Authorization-code OAuth is the standard Discord identity proof and linking transport.</p>
+    </li>
+    
+
+    <li id="source-SOC-5">
+      <a href="https://docs.discord.com/developers/platform/account-linking"><strong>SOC-5 — Discord Account Linking</strong></a>
+      <span>Discord · Official current documentation</span>
+      <p>Discord supports explicit application account-linking patterns.</p>
+    </li>
+    
+
+    <li id="source-SOC-6">
+      <a href="https://docs.discord.com/developers/discord-social-sdk/development-guides/account-linking-on-mobile"><strong>SOC-6 — Account Linking on Mobile</strong></a>
+      <span>Discord · Official current documentation</span>
+      <p>PKCE and redirect binding are especially important for native/mobile account-linking flows.</p>
+    </li>
+    
+
+    <li id="source-SEC-1">
+      <a href="https://datatracker.ietf.org/doc/rfc9700/"><strong>SEC-1 — RFC 9700 — OAuth 2.0 Security Best Current Practice</strong></a>
+      <span>IETF · Best Current Practice</span>
+      <p>Use authorization code, PKCE S256, exact redirects, issuer/context checks, and transaction binding.</p>
+    </li>
+    
+
+    <li id="source-SEC-2">
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-security-topics-update/"><strong>SEC-2 — Updates to OAuth 2.0 Security BCP</strong></a>
+      <span>IETF OAuth WG · Active 2026 Internet-Draft</span>
+      <p>COAT and cross-user session fixation require provider/toolkit/tenant isolation and same-user start/finish binding; PKCE alone is insufficient.</p>
+    </li>
+    
+
+    <li id="source-SEC-3">
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/16/"><strong>SEC-3 — Cross-Device Flows: Security Best Current Practice</strong></a>
+      <span>IETF OAuth WG · RFC publication queue / 2026 draft</span>
+      <p>Deep-link and QR flows need unique, short-lived, single-use codes, request binding, confirmation, and abuse controls.</p>
+    </li>
+    
+
+    <li id="source-WAL-1">
+      <a href="https://standards.chainagnostic.org/CAIPs/caip-122"><strong>WAL-1 — CAIP-122 — Sign-In With X</strong></a>
+      <span>Chain Agnostic Standards Alliance · Review</span>
+      <p>Provider-neutral sign-in message model using chain/account identifiers beyond Ethereum.</p>
+    </li>
+    
+
+    <li id="source-WAL-2">
+      <a href="https://standards.chainagnostic.org/CAIPs/caip-196"><strong>WAL-2 — CAIP-196 — CACAO</strong></a>
+      <span>Chain Agnostic Standards Alliance · Draft</span>
+      <p>Common proof/capability envelope for SIWx, SIWE, UCAN, and multiple signature types.</p>
+    </li>
+    
+
+    <li id="source-WAL-3">
+      <a href="https://standards.chainagnostic.org/CAIPs/caip-222"><strong>WAL-3 — CAIP-222 — wallet_authenticate</strong></a>
+      <span>Chain Agnostic Standards Alliance · Emerging standard</span>
+      <p>Bundles account exposure and cryptographic authentication in one request before the account is known.</p>
+    </li>
+    
+
+    <li id="source-WAL-4">
+      <a href="https://eips.ethereum.org/EIPS/eip-4361"><strong>WAL-4 — EIP-4361 — Sign-In with Ethereum</strong></a>
+      <span>Ethereum · Final</span>
+      <p>Canonical EVM wallet-auth message with nonce, origin, chain, time, and resource binding.</p>
+    </li>
+    
+
+    <li id="source-WAL-5">
+      <a href="https://docs.reown.com/appkit/authentication/one-click-auth"><strong>WAL-5 — AppKit One-Click Auth</strong></a>
+      <span>Reown · Production product</span>
+      <p>Preferred practical path to combine WalletConnect session establishment and SIWE authentication when supported.</p>
+    </li>
+    
+
+    <li id="source-WAL-6">
+      <a href="https://docs.reown.com/appkit/react-native/core/siwx"><strong>WAL-6 — AppKit SIWX</strong></a>
+      <span>Reown · Production product</span>
+      <p>CAIP-122-oriented multi-chain wallet authentication and capability detection.</p>
+    </li>
+    
+
+    <li id="source-WAL-7">
+      <a href="https://ercs.ethereum.org/ERCS/erc-7846"><strong>WAL-7 — ERC-7846 — wallet_connect</strong></a>
+      <span>Ethereum · Draft</span>
+      <p>Provider-level proposal to combine wallet connection and SIWE into one wallet interaction.</p>
+    </li>
+    
+
+    <li id="source-WAL-8">
+      <a href="https://raw.githubusercontent.com/ethereum/ERCs/master/ERCS/erc-8019.md"><strong>WAL-8 — ERC-8019 — Wallet-Managed Auto-Login for SIWE</strong></a>
+      <span>Ethereum · Review</span>
+      <p>Future wallet-local allowlist for zero-prompt SIWE after explicit trust policy.</p>
+    </li>
+    
+
+    <li id="source-WAL-9">
+      <a href="https://specs.walletconnect.com/2.0/specs/clients/core/identity/identity-keys"><strong>WAL-9 — Identity Keys</strong></a>
+      <span>WalletConnect · WalletConnect specification</span>
+      <p>A wallet can authorize a device/account-specific identity key to reduce repeated blockchain-key signatures.</p>
+    </li>
+    
+
+    <li id="source-WAL-10">
+      <a href="https://specs.walletconnect.com/2.0/specs/clients/sign/wallet-authentication"><strong>WAL-10 — Wallet Authentication and ReCaps</strong></a>
+      <span>WalletConnect · WalletConnect specification</span>
+      <p>Authenticated wallet sessions can carry scoped capabilities through ReCaps.</p>
+    </li>
+    
+
+    <li id="source-AUT-1">
+      <a href="https://www.better-auth.com/docs/plugins/generic-oauth"><strong>AUT-1 — Generic OAuth</strong></a>
+      <span>Better Auth · Production library</span>
+      <p>Generic OAuth/OIDC adapters and explicit link-account endpoint requiring an existing session.</p>
+    </li>
+    
+
+    <li id="source-AUT-2">
+      <a href="https://www.better-auth.com/docs/plugins/passkey"><strong>AUT-2 — Passkey Plugin</strong></a>
+      <span>Better Auth · Production library</span>
+      <p>WebAuthn/FIDO2 passkey enrollment and sign-in, including conditional UI.</p>
+    </li>
+    
+
+    <li id="source-AUT-3">
+      <a href="https://www.keycloak.org/documentation"><strong>AUT-3 — Keycloak Documentation 26.7</strong></a>
+      <span>Keycloak · Mature open source</span>
+      <p>Self-hosted OIDC/OAuth identity brokering, administration, and authorization services.</p>
+    </li>
+    
+
+    <li id="source-AUT-4">
+      <a href="https://www.ory.sh/docs"><strong>AUT-4 — Ory Documentation</strong></a>
+      <span>Ory · Managed and open-source options</span>
+      <p>Modern authentication, user management, and OAuth/OIDC building blocks with multiple deployment models.</p>
+    </li>
+    
+
+    <li id="source-PASS-1">
+      <a href="https://www.w3.org/TR/webauthn-3/"><strong>PASS-1 — Web Authentication Level 3</strong></a>
+      <span>W3C · Candidate Recommendation</span>
+      <p>Origin/RP-scoped public-key credentials with user verification and phishing-resistant authentication.</p>
+    </li>
+    
+
+    <li id="source-PASS-2">
+      <a href="https://pages.nist.gov/800-63-4/sp800-63b/syncable/"><strong>PASS-2 — SP 800-63B-4 — Syncable Authenticators</strong></a>
+      <span>NIST · Current NIST guidance</span>
+      <p>Synced passkeys can support AAL2 with controls but do not satisfy the non-exportability expected at AAL3.</p>
+    </li>
+    
+
+    <li id="source-PASS-3">
+      <a href="https://www.scitepress.org/Papers/2025/133806/133806.pdf"><strong>PASS-3 — Device-Bound vs. Synced Credentials</strong></a>
+      <span>ICISSP 2025 · Peer-reviewed research</span>
+      <p>Synced passkeys improve availability and recovery but concentrate security in the passkey provider; device-bound credentials offer stronger isolation.</p>
+    </li>
+    
+
+    <li id="source-VND-1">
+      <a href="https://docs.privy.io/authentication/user-authentication/privy-auth"><strong>VND-1 — Privy Authentication</strong></a>
+      <span>Privy · Production service</span>
+      <p>Common user object spanning Discord, Telegram, passkeys, OAuth, email/SMS, and SIWE/SIWS wallet login.</p>
+    </li>
+    
+
+    <li id="source-VND-2">
+      <a href="https://docs.privy.io/wallets/overview/embedded"><strong>VND-2 — Privy Embedded Wallets</strong></a>
+      <span>Privy · Production service</span>
+      <p>Broad multi-chain embedded-wallet infrastructure, policy controls, and key export paths.</p>
+    </li>
+    
+
+    <li id="source-VND-3">
+      <a href="https://docs.dynamic.xyz/headless/headless-wallet-management"><strong>VND-3 — Dynamic Headless Wallet Management</strong></a>
+      <span>Dynamic · Production service</span>
+      <p>External/embedded wallet discovery, multi-wallet linking, social auth, and custom UI support.</p>
+    </li>
+    
+
+    <li id="source-VND-4">
+      <a href="https://docs.dynamic.xyz/security/overview"><strong>VND-4 — Dynamic Security Overview</strong></a>
+      <span>Dynamic · Production service</span>
+      <p>Managed auth and wallet security architecture using layered controls and secure wallet infrastructure.</p>
+    </li>
+    
+
+    <li id="source-VND-5">
+      <a href="https://docs.cdp.coinbase.com/wallets/authentication/overview"><strong>VND-5 — Wallet Authentication</strong></a>
+      <span>Coinbase Developer Platform · Production service</span>
+      <p>Email/SMS/social authentication including Telegram, plus embedded user wallets.</p>
+    </li>
+    
+
+    <li id="source-VND-6">
+      <a href="https://docs.cdp.coinbase.com/wallets/authentication/auth-method-linking"><strong>VND-6 — Auth Method Linking</strong></a>
+      <span>Coinbase Developer Platform · Production service</span>
+      <p>Explicit linking of OAuth, OTP, and SIWE methods to a signed-in user.</p>
+    </li>
+    
+
+    <li id="source-VND-7">
+      <a href="https://docs.metamask.io/embedded-wallets/authentication/"><strong>VND-7 — Embedded Wallets Authentication</strong></a>
+      <span>MetaMask · Production service</span>
+      <p>External wallets, Discord and other OAuth providers, plus custom JWT/OIDC identity integration.</p>
+    </li>
+    
+
+    <li id="source-VND-8">
+      <a href="https://docs.metamask.io/embedded-wallets/architecture/"><strong>VND-8 — Embedded Wallets Architecture</strong></a>
+      <span>MetaMask · Production service</span>
+      <p>Threshold key-share architecture that can sit downstream of an existing JWT identity layer.</p>
+    </li>
+    
+
+    <li id="source-VND-9">
+      <a href="https://docs.turnkey.com/solutions/embedded-wallets/overview"><strong>VND-9 — Embedded Wallets Overview</strong></a>
+      <span>Turnkey · Production service</span>
+      <p>Passkey/social/OTP auth, multi-chain wallets, enclave key management, policies, and custody choices.</p>
+    </li>
+    
+
+    <li id="source-VND-10">
+      <a href="https://thirdweb.com/wallets"><strong>VND-10 — Wallets</strong></a>
+      <span>thirdweb · Production service</span>
+      <p>Rapid embedded wallet onboarding using social, passkey, external-wallet, and account-abstraction flows.</p>
+    </li>
+    
+
+    <li id="source-VND-11">
+      <a href="https://docs.base.org/base-account/overview/what-is-base-account"><strong>VND-11 — Base Account Overview</strong></a>
+      <span>Base · Production EVM product</span>
+      <p>Passkey-backed universal sign-on and smart-wallet identity across supported EVM networks.</p>
+    </li>
+    </ol>
+  </section>
+</main>
+<footer>
+  Generated 2026-07-19 18:24 UTC ·
+  Supporting workbook contains the full pairwise matrix, formulas, sensitivity model, portfolio gates, and source registry.
+</footer>
+<script>
+const options = [{"rank": 1, "option": "Native identity-api broker + durable session", "lane": "Foundation", "score": 91.02785941928325}, {"rank": 2, "option": "Telegram OIDC linking", "lane": "Chat/social", "score": 89.89748378650584}, {"rank": 3, "option": "Discord OAuth2 linking", "lane": "Chat/social", "score": 89.01189593283438}, {"rank": 4, "option": "Discord/Telegram bot deep-link + one-time code", "lane": "Chat-native", "score": 88.19715677955067}, {"rank": 5, "option": "Native WebAuthn/passkey adapter", "lane": "Credential", "score": 87.41577696958574}, {"rank": 6, "option": "Telegram Mini App initData", "lane": "Chat/social", "score": 86.35533503617481}, {"rank": 7, "option": "Privy", "lane": "Managed vendor", "score": 85.29784378194468}, {"rank": 8, "option": "Dynamic", "lane": "Managed vendor", "score": 83.65752316589858}, {"rank": 9, "option": "Reown SIWX + One-Click Auth", "lane": "Wallet UX", "score": 83.54673322284096}, {"rank": 10, "option": "Better Auth as credential-adapter plane", "lane": "Foundation", "score": 83.40310420756025}, {"rank": 11, "option": "MetaMask Embedded Wallets/Web3Auth", "lane": "Managed vendor", "score": 81.21615232157392}, {"rank": 12, "option": "Coinbase CDP Embedded Wallets", "lane": "Managed vendor", "score": 80.82773552718723}, {"rank": 13, "option": "CAIP-122 SIWx + CAIP-196 CACAO", "lane": "Wallet standard", "score": 79.87859019738329}, {"rank": 14, "option": "thirdweb In-App Wallets", "lane": "Managed vendor", "score": 76.39999892318477}, {"rank": 15, "option": "CAIP-222 wallet_authenticate", "lane": "Emerging wallet", "score": 75.9701254790643}, {"rank": 16, "option": "Turnkey", "lane": "Managed vendor", "score": 75.04420165279745}, {"rank": 17, "option": "Keycloak/Ory external OIDC broker", "lane": "Foundation", "score": 74.47181987053463}, {"rank": 18, "option": "WalletConnect Identity Keys + ReCaps", "lane": "Delegated wallet", "score": 71.37605862733979}, {"rank": 19, "option": "Legacy SIWE + connector orchestration", "lane": "Wallet fallback", "score": 69.08864184844114}, {"rank": 20, "option": "Base Account", "lane": "Managed vendor", "score": 67.02859923860268}, {"rank": 21, "option": "Legacy Telegram Login Widget", "lane": "Chat/social legacy", "score": 65.30708640627}, {"rank": 22, "option": "ERC-7846 wallet_connect + SIWE", "lane": "Emerging wallet", "score": 63.34078579483137}, {"rank": 23, "option": "ERC-8019 trusted automatic SIWE", "lane": "Future wallet", "score": 57.991986180732205}];
+const controls = document.getElementById('lane-controls');
+const lanes = [...new Set(options.map(o => o.lane))].sort();
+for (const lane of lanes) {
+  const b = document.createElement('button');
+  b.textContent = lane;
+  b.dataset.lane = lane;
+  controls.appendChild(b);
+}
+controls.addEventListener('click', (event) => {
+  if (event.target.tagName !== 'BUTTON') return;
+  for (const b of controls.querySelectorAll('button')) b.classList.remove('active');
+  event.target.classList.add('active');
+  const selected = event.target.dataset.lane;
+  for (const row of document.querySelectorAll('#options-table tbody tr')) {
+    row.hidden = selected !== 'all' && row.dataset.lane !== selected;
+  }
+});
+</script>
+</body>
+</html>

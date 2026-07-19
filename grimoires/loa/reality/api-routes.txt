@@ -1,0 +1,146 @@
+src/auth.ts:186://   route.post("/v1/...").use(...withSession()).body(Schema).handle(...)
+src/auth.ts:223: *   const r = applyWithSession(route.post("/v1/..."))
+src/hyper/session/csrf.ts:13: *   route.post("/mutate").use(sess).use(guard).handle(...)
+src/hyper/session/csrf.ts:55:      const headerToken = req.headers.get(headerName)
+src/hyper/session/csrf.ts:84:  const header = req.headers.get("cookie")
+src/hyper/session/index.ts:26:      const v = m.get(id)
+src/hyper/session/index.ts:29:        m.delete(id)
+src/hyper/session/index.ts:38:      m.delete(id)
+src/hyper/session/index.ts:104:      data = (await store.get(id)) ?? {}
+src/hyper/session/index.ts:171:  const header = req.headers.get("cookie")
+src/hyper/session/sqlite.ts:37:      const row = stmtGet.get(id) as { data: string; expires: number } | undefined
+src/hyper/client/transport.ts:27:  const ct = res.headers.get("content-type") ?? ""
+src/hyper/client/codegen.ts:67:      let next = cur.children.get(seg)
+src/hyper/log/wrap-queries.ts:18:      const v = Reflect.get(target, prop, receiver)
+packages/engine/src/tenant-registry.ts:104:    let adapter = this.adapters.get(tenantId);
+packages/engine/src/tenant-registry.ts:107:    const config = this.configs.get(tenantId);
+packages/engine/src/tenant-registry.ts:119:    const config = this.configs.get(tenantId);
+src/hyper/log/ai.ts:71:      const v = Reflect.get(target, prop, receiver)
+src/hyper/log/plugin.ts:62:        const requestId = req.headers.get(REQUEST_ID_HEADER) ?? makeId()
+src/hyper/mcp/server.ts:51:    const tool = byName.get(name)
+src/hyper/log/drains.ts:78:        method: "POST",
+src/hyper/mcp/audit.ts:24:    const route = byPath.get(`${t.method} ${t.path}`)
+packages/sdk/src/transport.ts:67:  readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+packages/sdk/src/transport.ts:171:    const requestId = res.headers.get("x-request-id") ?? undefined
+src/discord-oauth.ts:135:    method: "POST",
+src/discord-oauth.ts:336:    if (now > exp) _consumedStateNonces.delete(nonce)
+src/hyper/auth-jwt/index.ts:5: *   route.get("/me").auth().handle((c) => ok({ user: c.ctx.user }))
+src/hyper/auth-jwt/index.ts:101:  const h = req.headers.get("authorization")
+src/hyper/cors/index.ts:75:        const origin = req.headers.get("origin") ?? ""
+src/hyper/cors/index.ts:88:        const origin = req.headers.get("origin")
+packages/sdk/src/client.ts:19: *   await client.identity.get(userId)            → IdentityResp | null
+packages/sdk/src/client.ts:25: *   await client.profile.get({ world, ... })         → ProfileResp        (T2.3)
+packages/sdk/src/client.ts:69:   * on every authenticated request (`me()`, future `profile.get()` with auth, etc.).
+packages/sdk/src/client.ts:185:          method: "POST",
+packages/sdk/src/client.ts:192:          method: "POST",
+packages/sdk/src/client.ts:201:        method: "GET",
+packages/sdk/src/client.ts:211:            method: "GET",
+packages/sdk/src/client.ts:223:            method: "GET",
+packages/sdk/src/client.ts:232:            method: "GET",
+packages/sdk/src/client.ts:241:            method: "GET",
+packages/sdk/src/client.ts:252:          method: "GET",
+packages/sdk/src/client.ts:266:          method: "GET",
+packages/sdk/src/client.ts:283:          method: "POST",
+packages/sdk/src/client.ts:295:          method: "POST",
+packages/sdk/README.md:200:const user = await client.identity.get(userId)         // IdentityResp | null
+packages/sdk/README.md:212:  const profile = await client.profile.get({ world: "mibera", userId })
+packages/sdk/README.md:309:const raw = await client.identity.get(userId)
+packages/sdk/src/types.ts:78:// Use case: `client.identity.get(userId)` returns a typed `IdentityResp`
+packages/sdk/src/types.ts:83://   const raw = await client.identity.get(userId);
+packages/sdk/src/__tests__/types.type-test.ts:146:  const maybeIdentity = await client.identity.get("uuid")
+src/api/index.ts:125:  .get("/openapi.json")
+src/api/index.ts:129:  .get("/docs")
+packages/adapters/src/http-inventory-adapter.ts:96:      method: "GET",
+packages/auth-sdk/src/conformance/index.ts:144:    return this.store.get(url) ?? null;
+packages/auth-sdk/src/jwks-cache.ts:57:  const entry = entries.get(url);
+packages/auth-sdk/src/jwks-cache.ts:60:    entries.delete(url);
+packages/auth-sdk/src/jwks-cache.ts:152:    const entry = this.entries.get(url);
+packages/auth-sdk/src/jwks-cache.ts:154:      this.entries.delete(url);
+packages/auth-sdk/src/jwks-cache.ts:161:    this.entries.delete(url);
+packages/auth-sdk/src/jwks-cache.ts:166:      this.entries.delete(oldest);
+src/hyper/core/app.ts:66:    const built = fromPlainRouter(config.router).build()
+src/hyper/core/app.ts:70:  const router = new Router()
+src/hyper/core/app.ts:189:    const ct = res.headers.get("content-type") ?? ""
+src/hyper/core/app.ts:475:        c = new Bun.CookieMap(this.req.headers.get("cookie") ?? "")
+src/hyper/core/app.ts:689:    const list = byPath.get(r.path)
+src/hyper/core/group.ts:130:      cookies: () => new Bun.CookieMap(req.headers.get("cookie") ?? ""),
+src/hyper/core/group.ts:203:export function fromPlainRouter(router: PlainRouter, prefix = ""): GroupBuilder {
+packages/adapters/src/svc-jwt-verifier.ts:112:  /** JWKS URL — pass-through to jwksCache.get(url). */
+packages/adapters/src/svc-jwt-verifier.ts:314:    const cached = await opts.jwksCache.get(opts.jwksUrl);
+src/api/routes/link.ts:57:  .post("/v1/link/verified-wallet")
+src/api/routes/link.ts:80:    ).req.headers.get("x-service-token")
+src/api/routes/link.ts:124:  .post("/v1/link/wallet-only")
+src/api/routes/link.ts:146:    ).req.headers.get("x-service-token")
+src/hyper/core/router.ts:83:        let child = cur.statics.get(seg)
+src/hyper/core/router.ts:190:    const stat = node.statics.get(seg)
+src/hyper/core/router.ts:224:  const stat = node.statics.get(seg)
+src/hyper/core/request.ts:42:  const contentLength = req.headers.get("content-length")
+src/hyper/core/request.ts:102:  const ct = (req.headers.get("content-type") ?? "").toLowerCase()
+src/hyper/core/resource.ts:7: *     get:    ({ params }) => store.get(params.id),
+src/hyper/core/resource.ts:56:        .get(basePath)
+src/hyper/core/resource.ts:72:        .get(`${basePath}/:id`)
+src/hyper/core/resource.ts:88:        .post(basePath)
+src/hyper/core/resource.ts:104:        .patch(`${basePath}/:id`)
+src/hyper/core/resource.ts:120:        .delete(`${basePath}/:id`)
+src/hyper/core/security.ts:87:  for (let i = 0; i < SUPPRESSED_HEADERS.length; i++) headers.delete(SUPPRESSED_HEADERS[i]!)
+src/hyper/core/route.ts:192:   *   route.get("/health").static(Response.json({ ok: true }))
+src/hyper/core/route.ts:312:          cookies: () => new Bun.CookieMap(req.headers.get("cookie") ?? ""),
+packages/adapters/src/__tests__/mock-score.ts:75:    const failure = this.failureByWallet.get(key)
+packages/adapters/src/__tests__/mock-score.ts:77:    const fixture = this.scoresByWallet.get(key)
+packages/adapters/src/__tests__/mock-score.ts:103:      identities[key] = this.resolvedByWallet.get(key) ?? emptyResolvedIdentity(key)
+src/hyper/core/hyper.ts:10: *     .get("/", () => "Hello Hyper")
+src/hyper/core/hyper.ts:437:    const g = fromPlainRouter(cfg as never, "")
+src/hyper/core/hyper.ts:559:   *   export default new Hyper().get("/", () => "hi").listen(3000)
+src/hyper/core/hyper.ts:608:    activeServers.delete(this)
+src/hyper/core/hyper.ts:649:    // String shortcut: `.get("/", "Hello")` → .staticResponse(new Response("Hello"))
+src/hyper/core/hyper.ts:695:        return route.get(path)
+src/hyper/core/hyper.ts:697:        return route.post(path)
+src/hyper/core/hyper.ts:699:        return route.put(path)
+src/hyper/core/hyper.ts:701:        return route.patch(path)
+src/hyper/core/hyper.ts:703:        return route.delete(path)
+src/api/routes/auth.ts:111:  .post("/v1/auth/challenge")
+src/api/routes/auth.ts:216:export const authVerify = applyWithSession(route.post("/v1/auth/verify"))
+src/api/routes/well-known-jwks.ts:13:  .get("/.well-known/jwks.json")
+src/api/routes/discord-link.ts:95:  .get("/v1/link/discord/initiate")
+src/api/routes/discord-link.ts:135:  .get("/v1/link/discord/callback")
+src/api/routes/discord-link.ts:159:  const code = url.searchParams.get("code")
+src/api/routes/discord-link.ts:160:  const state = url.searchParams.get("state")
+src/api/routes/identity-resolve.ts:40:  .post("/v1/identity/resolve")
+packages/adapters/src/__tests__/mock-inventory.ts:65:    const failure = this.failureByWallet.get(key)
+packages/adapters/src/__tests__/mock-inventory.ts:67:    const fixture = this.holdingsByWallet.get(key)
+src/api/routes/profile.ts:63:  .get("/v1/profile")
+src/api/routes/profile.ts:150:  .get("/v1/mibera/dimensions")
+src/api/routes/health.ts:13:  .get("/health")
+packages/adapters/src/federation-http.ts:81:  readonly method: "GET" | "POST"
+src/api/routes/auth-discord.ts:58:  .get("/v1/auth/discord/authorize")
+src/api/routes/auth-discord.ts:83:    const redirectUri = url.searchParams.get("redirect_uri")
+src/api/routes/auth-discord.ts:84:    const csrfState = url.searchParams.get("state")
+src/api/routes/auth-discord.ts:113:  .post("/v1/auth/discord/exchange")
+packages/adapters/src/__tests__/mock-codex.ts:68:      const entry = this.miberaByTokenId.get(n)
+src/api/routes/me.ts:40:  .get("/v1/me")
+src/api/routes/v1/users/managed-worlds.ts:99:  const h = req.headers.get("authorization")
+src/api/routes/v1/users/managed-worlds.ts:117:  .get("/v1/users/:id/managed-worlds")
+src/api/routes/v1/users/managed-worlds.ts:149:    const presentedToken = req.headers.get("x-service-token")
+packages/adapters/src/http-jwt-signer.ts:76:        method: 'POST',
+packages/adapters/src/http-codex-adapter.ts:138:      method: "POST",
+src/api/routes/resolve.ts:86:  .get("/v1/resolve/wallet/:address")
+src/api/routes/resolve.ts:112:  .get("/v1/resolve/account/:provider/:externalId")
+src/api/routes/resolve.ts:147:  .get("/v1/resolve/nym/:worldSlug/:nym")
+src/api/routes/resolve.ts:187:  .get("/v1/identity/:userId")
+packages/adapters/src/migrate.ts:61:      const slot = versions.get(v) ?? {}
+packages/adapters/src/migrate.ts:66:      const slot = versions.get(v) ?? {}
+src/api/routes/v1/auth/service-jwt.ts:258:  const existing = _rateLimitBuckets.get(cellName) ?? []
+src/api/routes/v1/auth/service-jwt.ts:285:      _rateLimitBuckets.delete(oldestCell)
+src/api/routes/v1/auth/service-jwt.ts:350:  .post("/v1/auth/service-jwt")
+src/api/routes/v1/auth/service-jwt.ts:365:    const cellName = req.headers.get("x-cell-name")
+src/api/routes/v1/auth/service-jwt.ts:366:    const presentedKey = req.headers.get("x-cell-api-key")
+src/api/routes/v1/auth/service-jwt.ts:529:    const userAgent = req.headers.get("user-agent") ?? null
+src/api/routes/v1/auth/service-jwt.ts:530:    const requestId = req.headers.get("x-request-id") ?? null
+src/api/routes/v1/auth/service-jwt.ts:661:  const xff = req.headers.get("x-forwarded-for")
+packages/adapters/src/http-score-adapter.ts:115:      method: "GET",
+packages/adapters/src/http-score-adapter.ts:139:      method: "POST",
+src/api/routes/v1/auth/denylist/check.ts:198:  .post('/v1/auth/denylist/check')
+src/api/routes/v1/auth/denylist/check.ts:228:    const cellName = req.headers.get('x-cell-name');
+src/api/routes/v1/auth/denylist/check.ts:229:    const apiKey = req.headers.get('x-cell-api-key');
+packages/protocol/src/api/profile.ts:7: * `client.profile.get(...)` now returns a strongly-typed `ProfileResp`
+packages/protocol/src/api/federation/score.ts:14: *     `wallets.get("/:address", zValidator("param", addressSchema), …)`.

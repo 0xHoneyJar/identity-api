@@ -36,3 +36,26 @@
 - **identity-api is live but build-lagged**: `identity.0xhoneyjar.xyz` serves only the HS256 spine; merged ES256 `service-jwt` + `/.well-known/jwks.json` routes **404** (Railway deploy predates the W2.5 sprint-2 merges). One consumer (`freeside-dashboard`) is itself undeployed.
 - **ES256 svc-JWT contract-change window is OPEN**: cluster probe (0.93) found ZERO external consumers; the "1 vendored consumer" (`fa-c2-world-managers`) is our own git worktree. Cheapest moment to make breaking contract changes — until a real world first vendors the source-distributed `@0xhoneyjar/auth` SDK.
 - **Stale doctrine corrected** (banner-only; full rewrite is G-1): README + `protocol/src/index.ts` claimed "JWKS issuance lives at loa-freeside/apps/gateway" — false; the signer is the in-repo `LocalEs256Signer`. The loa-freeside gateway is a Discord/NATS gateway with no `/jwks` or `/issue`.
+
+
+## Session Continuity
+
+- **Last ride:** 2026-07-19 `/ride --enriched`
+- **Reality:** `grimoires/loa/reality/` (meta `.reality-meta.json`)
+- **Operator PRD archived:** `grimoires/loa/legacy/pre-ride-2026-07-19/prd.md`
+- **Active gaps:** `grimoires/loa/gaps.md` (10 open)
+- **Next:** resume `/plan-and-analyze` Phase 0 synthesis using reality + handoff; decide GAP-002 (handoff adopt vs adapt)
+
+
+## Decision Log
+
+| 2026-07-19 | D-ADAPT-001 adapt handoff onto packages/spine | Ride drift score 48; hex/intents are ghosts | /plan-and-analyze |
+| 2026-07-19 | D-JWT-001 user sessions ES256 via JWTSigner | GAP-006 P0; HS256 jwt-mint vs PRD D7 | /plan-and-analyze |
+| 2026-07-19 | D-MCP-001 Hyper meta.mcp is live agent surface | mcp-tools scaffold only | /plan-and-analyze |
+| 2026-07-19 | D-MERGE-DONE merge facade shipped | merge-identity.ts + route exist | /ride |
+
+| Date | Decision | Rationale | Source |
+|------|----------|-----------|--------|
+| 2026-07-19 | Archive operator PRD before ride overwrite | Preserve v3.0 narrative; code-grounded PRD for agents | /ride Phase 6 |
+| 2026-07-19 | Scope extraction to packages/+src/ | Full-tree rg hung on .claude constructs | /ride Phase 2 |
+

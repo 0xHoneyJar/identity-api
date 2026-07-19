@@ -1,0 +1,11 @@
+{
+  "name": "identity-api-claude-cli-handoff",
+  "created_at": "2026-07-19T20:47:25.879832+00:00",
+  "architecture": "hexagonal",
+  "primary_prompt": "CLAUDE_PROMPT.md",
+  "contents": [
+    "docs",
+    "reference-implementation",
+    "artifacts"
+  ]
+}
