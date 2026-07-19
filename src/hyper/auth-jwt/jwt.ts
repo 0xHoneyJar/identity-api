@@ -75,7 +75,9 @@ export async function verifyJwt(
     header = JSON.parse(b64urlToUtf8(h!)) as JwtHeader
     payload = JSON.parse(b64urlToUtf8(p!)) as JwtPayload
   } catch {
-    throw new JwtError("invalid_token", "malformed jwt")
+    // L7 / LBR-3 contract: garbage base64 / non-JSON segments → 401
+    // `malformed_token` (see src/auth.ts hardenAuthMiddleware + routes.test.ts).
+    throw new JwtError("malformed_token", "malformed jwt")
   }
 
   const alg = header.alg
