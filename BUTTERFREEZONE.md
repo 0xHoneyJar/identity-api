@@ -14,7 +14,7 @@ capability_requirements:
   - git: read_write
   - shell: execute
   - github_api: read_write (scope: external)
-version: loa@v1.196.0
+version: 0.1.0
 installation_mode: unknown
 trust_level: L2-verified
 -->
@@ -149,7 +149,7 @@ Directory structure:
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
 | `docs/` | 3 | Documentation | \u2014 |
-| `grimoires/` | 182 | Loa state and memory files | \u2014 |
+| `grimoires/` | 183 | Loa state and memory files | \u2014 |
 | `packages/` | 174 | Documentation | \u2014 |
 | `scripts/` | 12 | Utility scripts | \u2014 |
 | `src/` | 96 | Source code | \u2014 |
@@ -189,15 +189,15 @@ Available commands:
 - `npm run build` — bun
 - `npm run test` — bun
 <!-- ground-truth-meta
-head_sha: 446f337593194fc2214abf91b9d055315e21d884
-generated_at: 2026-07-19T22:00:09Z
+head_sha: 09e3e248f80f292509c00fcc54034b0ef4d6c4c7
+generated_at: 2026-07-19T22:06:24Z
 generator: butterfreezone-gen v1.0.0
 sections:
-  agent_context: 7895c2240bf3c6bc655ef954d5848dce3102a7331e53c9cdd16792c92c6255e1
+  agent_context: 7ae89494865852a9f73d536c07238701977f03776aeea0dcf7a5f7c77a928b87
   capabilities: eac5157c375e3302e37005b49cbcdd4b16d2328c11ce36c57eec113dad885d18
   architecture: 36ed36a6001b92cda504d5abe69994db6bce8d35a1903f7a9c068aa2baa472d7
   interfaces: 154ee7c6c0b3e2256f53301ef8aae7841bc9d71f83ca347b5aeff01f12fe137d
-  module_map: 1a2f3a08bfc5198d2c0cc501df6fef3a23190ae6b561bbdbca7fd45905711d5e
+  module_map: 4ead5b2f2c3299a4fd5778d91fed0d1cab9f5154cdb1b41d328b5cddf798d586
   verification: c49674d7283e0b9e5d3c3c64991bb2db8df42d72478090bca25303476cdb57ff
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
   ecosystem: 616f402774141d02cf9efcaf76f7fac43b8a50ba9d2971a9f8767c1159fc39cf
