@@ -1,0 +1,39 @@
+src/auth.ts:41: * TODO(T-future/sprint-1.1-3): perform the swap; this comment is the seam.
+src/auth.ts:97:  algorithms: ["HS256"], // TODO(sprint-1.1-3): swap to ["ES256"] — see header comment
+packages/ports/src/spine.port.ts:65: * typed name a user holds in a world: a generated MIBERA-XXXX handle, an
+packages/engine/src/link-wallet-only.ts:51: * different `MIBERA-XXXX` row. We reuse the existing `getIdentity` read
+packages/engine/src/link-wallet-only.ts:146:   * MIBERA-XXXX. On an absorb it echoes the imported `generated` value (what
+packages/engine/src/link-wallet-only.ts:252:          // handle; midi can drop its local MIBERA-XXXX fallback. A LEGACY-ONLY
+packages/engine/src/index.ts:86:// MIBERA-XXXX handle is the default-display floor; the raw shortened address is
+packages/engine/src/__tests__/resolve-display-name.test.ts:6: * floor: the generated MIBERA-XXXX handle is the DEFAULT-display floor; the
+packages/engine/src/resolve-display-name.ts:8: *   - The generated MIBERA-XXXX handle is the DEFAULT-display floor.
+src/discord-oauth.ts:87:/** @deprecated Tests may still assert this class; live client uses fetch exchange. */
+src/api/index.ts:75:      algorithms: ["HS256"], // TODO(sprint-1.1-3): swap to ["ES256"] when src/auth.ts swaps
+src/api/__tests__/wallet-only-e2e-goal-validation.test.ts:9: *   → assert EVERY user resolves to a name (claimed nym, else MIBERA-XXXX),
+src/api/__tests__/wallet-only-e2e-goal-validation.test.ts:175:        // address. Every backfilled user has at least a generated MIBERA-XXXX.
+packages/protocol/src/api/link.ts:98: * `generated_name` carries the user's handle: the minted MIBERA-XXXX, the
+packages/sdk/src/__tests__/types.type-test.ts:6: * typechecked by `tsc --noEmit`. Each `@ts-expect-error` line below is a
+packages/sdk/src/__tests__/types.type-test.ts:9: * '@ts-expect-error' directive". So:
+packages/sdk/src/__tests__/types.type-test.ts:20: *   - One @ts-expect-error per intended-failure line.
+packages/sdk/src/__tests__/types.type-test.ts:39:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:43:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:49:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:52:  // FAIL: unknown extra field (collapsed to one line so the @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:55:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:73:  // FAIL: missing required field (signature). Collapsed so the @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:76:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:80:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:96:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:114:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:126:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:138:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:150:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:163:    // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:188:  // onto one line so the @ts-expect-error pins to the call, not the empty
+packages/sdk/src/__tests__/types.type-test.ts:190:  // @ts-expect-error
+packages/sdk/src/__tests__/types.type-test.ts:199:// the @ts-expect-error claims).
+packages/protocol/src/__tests__/schemas.test.ts:40:    const w = { chain: 'ripple', address: 'rXXX', verified_via: 'siwe', linked_at: '2026-05-04T00:00:00Z' };
+src/api/__tests__/wallet-only-route.test.ts:285:    // its local MIBERA-XXXX fallback.
+packages/protocol/src/api/profile.ts:80:   * MIBERA-XXXX handle is the floor; `display_source` NEVER reports the raw
+packages/protocol/src/api/identity-resolve.ts:40: *   - `generated`      — the spine-minted MIBERA-XXXX handle (the privacy floor)
+src/api/routes/v1/users/managed-worlds.ts:106:      algorithms: ["HS256"], // TODO(sprint-1.1-3): ES256 with the rest of the auth surface

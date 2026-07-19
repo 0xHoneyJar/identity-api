@@ -14,3 +14,6 @@ coverage/
 
 # Loa disabled skills (feature-gated)
 .claude/.skills-disabled/
+
+# Beads runtime history snapshots (br-generated, never committed)
+.beads/.br_history/

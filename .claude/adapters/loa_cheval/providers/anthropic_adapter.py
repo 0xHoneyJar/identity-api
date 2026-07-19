@@ -35,8 +35,14 @@ from loa_cheval.types import (
     Usage,
     dispatch_provider_stream_error,
 )
+from loa_cheval.routing import EmptyContentError
 
 logger = logging.getLogger("loa_cheval.providers.anthropic")
+
+# cycle-114 FR-2: valid values for the Anthropic `output_config.effort` control
+# (Opus 4.5+/Sonnet 4.6). Effort governs reasoning depth WITHOUT manual
+# thinking budgets — Opus 4.7/4.8 reject `thinking.budget_tokens` with HTTP 400.
+_VALID_EFFORT = frozenset({"low", "medium", "high", "xhigh", "max"})
 
 
 # cycle-109 followup #883 Bug 3 — billing-class error classification.
@@ -76,6 +82,17 @@ def _is_billing_class_error(message: str) -> bool:
         return False
     haystack = message.lower()
     return any(token in haystack for token in _BILLING_CLASS_TOKENS)
+
+
+def _is_refusal(metadata: Optional[Dict[str, Any]]) -> bool:
+    """issue #1102: True when the provider returned stop_reason == "refusal".
+
+    A Fable/Anthropic refusal arrives as HTTP 200 + non-empty prose +
+    stop_reason "refusal". Treating it as empty-content (retryable) lets the
+    within-company chain walk instead of the flatline arbiter silently
+    passing a zero-decision gate.
+    """
+    return bool(metadata) and metadata.get("stop_reason") == "refusal"
 
 
 class AnthropicAdapter(ProviderAdapter):
@@ -121,6 +138,22 @@ class AnthropicAdapter(ProviderAdapter):
             body["tools"] = _transform_tools_to_anthropic(request.tools)
         if request.tool_choice:
             body["tool_choice"] = _transform_tool_choice(request.tool_choice)
+
+        # cycle-114 FR-2: reasoning-depth control via output_config.effort.
+        # Precedence: explicit request.effort > metadata["effort"]. When unset,
+        # the body is byte-identical to the pre-cycle-114 shape (model default
+        # effort = "high"). NEVER emit thinking.budget_tokens — adaptive-thinking
+        # Opus 4.7/4.8 reject it with HTTP 400; effort is the supported control.
+        effort = request.effort or (
+            (request.metadata or {}).get("effort") if request.metadata else None
+        )
+        if effort is not None:
+            if effort not in _VALID_EFFORT:
+                raise InvalidInputError(
+                    f"invalid effort {effort!r}; expected one of "
+                    f"{sorted(_VALID_EFFORT)}"
+                )
+            body.setdefault("output_config", {})["effort"] = effort
 
         # Build headers — Anthropic uses x-api-key, not Bearer token
         auth = self._get_auth_header()
@@ -255,6 +288,16 @@ class AnthropicAdapter(ProviderAdapter):
         # cycle-103 T3.2 / AC-3.2: set observed-transport flag for audit.
         _meta = dict(result.metadata or {})
         _meta["streaming"] = True
+        # issue #1102: a refusal (HTTP 200 + prose + stop_reason:"refusal") must
+        # raise a retryable EmptyContentError so the within-company chain walks
+        # (caught at cheval.py `except _EmptyContentError`) instead of the
+        # flatline arbiter silently applying zero decisions.
+        if _is_refusal(_meta):
+            raise EmptyContentError(
+                provider=self.provider,
+                model_id=body["model"],
+                reason="stop_reason:refusal",
+            )
         return CompletionResult(
             content=result.content,
             tool_calls=result.tool_calls,
@@ -348,6 +391,18 @@ class AnthropicAdapter(ProviderAdapter):
         )
 
         # cycle-103 T3.2 / AC-3.2: non-streaming path → metadata['streaming']=False.
+        # issue #1102: thread stop_reason for parity with the streaming path
+        # and raise a retryable EmptyContentError on refusal so the chain walks.
+        _meta: Dict[str, Any] = {"streaming": False}
+        stop_reason = resp.get("stop_reason")
+        if stop_reason:
+            _meta["stop_reason"] = stop_reason
+        if _is_refusal(_meta):
+            raise EmptyContentError(
+                provider=self.provider,
+                model_id=resp.get("model", "unknown"),
+                reason="stop_reason:refusal",
+            )
         return CompletionResult(
             content=content,
             tool_calls=tool_calls if tool_calls else None,
@@ -356,7 +411,7 @@ class AnthropicAdapter(ProviderAdapter):
             model=resp.get("model", "unknown"),
             latency_ms=latency_ms,
             provider=self.provider,
-            metadata={"streaming": False},
+            metadata=_meta,
         )
 
     def validate_config(self) -> List[str]:

@@ -20,6 +20,20 @@
   "integrations": [
     "github"
   ],
+  "run_mode": {
+    "enabled": true,
+    "defaults": {
+      "max_cycles": 20,
+      "timeout_hours": 8
+    },
+    "sprint_plan": {
+      "branch_prefix": "",
+      "default_branch_name": "w2.5-identity-resolve-facade",
+      "consolidate_pr": true,
+      "commit_prefix": "feat",
+      "include_commits_by_sprint": true
+    }
+  },
   "upgrade": {
     "auto_commit": true,
     "auto_tag": true,

@@ -34,9 +34,8 @@
  *   - 403 forbidden       — valid bearer JWT but its sub ≠ the requested id
  *                           (authenticated, but not authorized for this user)
  *
- * Bearer verification reuses `verifyJwt` from `@hyper/auth-jwt` against the
- * same `JWT_SECRET` the `.auth()`-gated routes use (HS256 today; flips to
- * ES256 with the rest of the auth surface per src/auth.ts sprint-1.1 #3).
+ * Bearer verification reuses `verifyJwt` from `@hyper/auth-jwt` with the same
+ * dual-path as `.auth()`: ES256 via user JWKS + HS256 via JWT_SECRET (D-JWT-001).
  *
  * ── NOT a 404 on empty ──────────────────────────────────────────────────────
  * A user who manages nothing returns 200 `{ user_id, worlds: [] }`. "Not a
@@ -52,8 +51,8 @@
 
 import { createHash, timingSafeEqual } from "node:crypto"
 import { jsonResponse, badRequest, unauthorized } from "@hyper/core"
-import { verifyJwt } from "@hyper/auth-jwt"
-import { route, JWT_SECRET } from "../../../../auth"
+import { verifyJwt, type JWK } from "@hyper/auth-jwt"
+import { route, JWT_SECRET, USER_SESSION_JWKS } from "../../../../auth"
 import { getSpine } from "../../../spine"
 import { getManagedWorlds } from "@freeside-auth/engine"
 import { UserIdParamSchema } from "@freeside-auth/protocol/api"
@@ -103,7 +102,8 @@ async function verifiedSub(req: Request): Promise<string | null> {
   try {
     const { payload } = await verifyJwt(value, {
       secret: JWT_SECRET,
-      algorithms: ["HS256"], // TODO(sprint-1.1-3): ES256 with the rest of the auth surface
+      algorithms: ["HS256", "ES256"],
+      jwks: { keys: USER_SESSION_JWKS.keys as JWK[] },
     })
     return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null
   } catch {

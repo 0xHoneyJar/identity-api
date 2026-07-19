@@ -1,0 +1,10 @@
+import type {CredentialProofVerifier,VerifiedCredentialEvidence} from "../ports/index.js";
+export type DiscordProof={authorizationCode:string;codeVerifier:string;redirectUri:string};
+export interface DiscordClient{exchangeCode(input:DiscordProof):Promise<{accessToken:string}>;currentUser(token:string):Promise<{id:string;username?:string}>}
+export class DiscordOAuthVerifier implements CredentialProofVerifier<DiscordProof>{constructor(private client:DiscordClient){} async verify(input:DiscordProof):Promise<VerifiedCredentialEvidence>{const token=await this.client.exchangeCode(input);const user=await this.client.currentUser(token.accessToken);return {provider:"discord",issuer:"https://discord.com",subject:user.id,proofType:"oauth2-authorization-code",proofVersion:"1",verifiedAt:new Date(),claims:{username:user.username}}}}
+export type TelegramProof={authorizationCode:string;codeVerifier:string;redirectUri:string;expectedNonce:string};
+export interface TelegramClient{exchangeAndVerify(input:TelegramProof):Promise<{issuer:string;subject:string;claims:Record<string,unknown>}>}
+export class TelegramOidcVerifier implements CredentialProofVerifier<TelegramProof>{constructor(private client:TelegramClient){} async verify(input:TelegramProof):Promise<VerifiedCredentialEvidence>{const v=await this.client.exchangeAndVerify(input);return {provider:"telegram",issuer:v.issuer,subject:v.subject,proofType:"oidc-authorization-code",proofVersion:"1",verifiedAt:new Date(),claims:v.claims}}}
+export type SiwxProof={message:string;signature:string;expectedNonce:string;expectedDomain:string;expectedAudience:string};
+export interface SiwxLibrary{verify(input:SiwxProof):Promise<{chainId:string;accountId:string;proofType:string;claims:Record<string,unknown>}>}
+export class SiwxVerifier implements CredentialProofVerifier<SiwxProof>{constructor(private library:SiwxLibrary){}async verify(input:SiwxProof):Promise<VerifiedCredentialEvidence>{const v=await this.library.verify(input);return {provider:"wallet",issuer:"did:pkh",subject:v.accountId,proofType:v.proofType,proofVersion:"1",verifiedAt:new Date(),claims:{chainId:v.chainId,...v.claims}}}}

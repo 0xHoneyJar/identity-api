@@ -4,6 +4,9 @@
  *   app({ plugins: [authJwtPlugin({ secret: env.JWT_SECRET })] })
  *   route.get("/me").auth().handle((c) => ok({ user: c.ctx.user }))
  *
+ * Dual-path (D-JWT-001): pass `algorithms: ["HS256", "ES256"]` + `jwks`
+ * (user-plane keys) to accept both transition HS256 sessions and ES256.
+ *
  * `route.auth()` is a thin wrapper around `route.meta({ auth: true })`
  * plus a pre-chained middleware that enforces presence of `ctx.user`.
  */
@@ -13,7 +16,7 @@ import type { HyperPlugin, Middleware } from "@hyper/core"
 import { JwtError, type JwtPayload, type VerifyOptions, verifyJwt } from "./jwt.ts"
 
 export { JwtError, verifyJwt } from "./jwt.ts"
-export type { JwtAlgorithm, JwtHeader, JwtPayload, VerifyOptions } from "./jwt.ts"
+export type { JwtAlgorithm, JwtHeader, JwtPayload, VerifyOptions, JWK } from "./jwt.ts"
 
 /**
  * Default `ctx.user` shape when no `loadUser` is supplied. Mirrors the
@@ -39,7 +42,11 @@ export interface AuthJwtConfig extends VerifyOptions {
 /** Minimum secret length we enforce at boot. 32 bytes = 256 bits. */
 export const MIN_JWT_SECRET_BYTES = 32
 
-/** Validates a JWT secret against the minimum-length rule. Throws with why/fix. */
+/**
+ * Validates auth-jwt boot config.
+ * - HMAC algorithms require a secret (≥32 bytes unless allowShort).
+ * - ES256 may rely on `jwks` / `publicKeys` without a secret.
+ */
 export function validateJwtSecret(
   secret: string | Uint8Array | undefined,
   opts: { readonly allowShort?: boolean } = {},
@@ -56,6 +63,32 @@ export function validateJwtSecret(
     throw new Error(
       `@hyper/auth-jwt: secret is ${bytes} bytes; minimum is ${MIN_JWT_SECRET_BYTES}. Why: short HS256 secrets are brute-forceable in hours on commodity hardware. Fix: generate a 32+ byte secret (e.g., \`openssl rand -base64 48\`) or pass \`allowShortSecret: true\` at your own risk.`,
     )
+  }
+}
+
+/** Validate full AuthJwtConfig for dual-path HS* + ES256 boots. */
+export function validateAuthJwtConfig(config: AuthJwtConfig): void {
+  const algs = config.algorithms ?? ["HS256"]
+  const needsHs = algs.some((a) => a === "HS256" || a === "HS384" || a === "HS512")
+  const needsEs = algs.includes("ES256")
+
+  if (needsHs) {
+    validateJwtSecret(config.secret, { allowShort: config.allowShortSecret ?? false })
+  } else if (config.secret !== undefined) {
+    // Secret provided but unused — still enforce length if present.
+    validateJwtSecret(config.secret, { allowShort: config.allowShortSecret ?? false })
+  }
+
+  if (needsEs) {
+    const hasJwks = (config.jwks?.keys?.length ?? 0) > 0
+    const hasKeys = (config.publicKeys?.length ?? 0) > 0
+    if (!hasJwks && !hasKeys && !needsHs) {
+      throw new Error(
+        "@hyper/auth-jwt: ES256 requires `jwks` or `publicKeys`. Why: asymmetric verify needs public key material. Fix: pass user JWKS from buildUserJwksDocumentFromEnv().",
+      )
+    }
+    // Dual-path boots may have empty user JWKS during transition — ES256
+    // tokens simply fail verify until keys are provisioned.
   }
 }
 
@@ -76,7 +109,7 @@ declare module "@hyper/core" {
 }
 
 export function authJwt(config: AuthJwtConfig): Middleware {
-  validateJwtSecret(config.secret, { allowShort: config.allowShortSecret ?? false })
+  validateAuthJwtConfig(config)
   const extract = config.extract ?? defaultExtract
   return async ({ ctx, req, next }) => {
     const token = extract(req)
@@ -120,7 +153,7 @@ function unauthorized(code: string) {
  * or call `.auth()` as sugar.
  */
 export function authJwtPlugin(config: AuthJwtConfig): HyperPlugin {
-  validateJwtSecret(config.secret, { allowShort: config.allowShortSecret ?? false })
+  validateAuthJwtConfig(config)
   installAuthMethod(authJwt(config))
   return {
     name: "@hyper/auth-jwt",

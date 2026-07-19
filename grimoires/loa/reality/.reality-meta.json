@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-07-19T21:55:00Z",
+  "ride_flags": {
+    "enriched": true,
+    "ENRICH_GAPS": true,
+    "ENRICH_DECISIONS": true,
+    "ENRICH_TERMS": true,
+    "ENRICH_SIMPLICITY": true
+  },
+  "staleness_days": 7,
+  "probe": {
+    "total_lines_approx": 41000,
+    "strategy": "prioritized",
+    "scope": ["packages", "src"]
+  },
+  "artifacts": [
+    "index.md",
+    "structure.md",
+    "architecture-overview.md",
+    "api-surface.md",
+    "types.md",
+    "interfaces.md",
+    "entry-points.md",
+    "extracted-prd.md",
+    "extracted-sdd.md",
+    "hygiene-report.md",
+    "component-inventory.md",
+    "loading-plan.md"
+  ]
+}

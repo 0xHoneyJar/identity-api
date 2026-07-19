@@ -1,3 +1,5 @@
+> ⚠️ **SUPERSEDED (2026-07-19):** Phase-0 "midi writer / validator-only" stance is obsolete. See `CLAUDE.md` hard rules + `grimoires/loa/prd.md` (D1 writer SoR, D-JWT-001 user ES256).
+
 # INTENT — why freeside-auth exists
 
 > The auth-unification audit (2026-04-16, `bonfire/grimoires/bonfire/context/auth-unification-seed/02-current-state-audit.md`) named the problem: "Freeside JWKS infrastructure exists in loa-freeside/apps/gateway but is not consumed by any world. ZERO worlds issue Freeside tenant JWTs. Each world authenticates users independently." This module ends that.

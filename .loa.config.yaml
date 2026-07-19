@@ -93,3 +93,35 @@ upgrade:
   auto_tag: true
   # Conventional commit prefix (default: "chore")
   commit_prefix: "chore"
+
+# =============================================================================
+# Run Bridge (enabled 2026-07-19 — auth-linking adapt cycle)
+# =============================================================================
+run_bridge:
+  enabled: true
+  defaults:
+    depth: 3
+    per_sprint: false
+    flatline_threshold: 0.05
+    consecutive_flatline: 2
+  timeouts:
+    per_iteration_hours: 4
+    total_hours: 24
+  github_trail:
+    post_comments: true
+    update_pr_body: true
+  ground_truth:
+    enabled: true
+  vision_registry:
+    enabled: true
+    auto_capture: true
+  rtfm:
+    enabled: true
+    max_fix_iterations: 1
+  lore:
+    enabled: true
+  pipeline_self_review:
+    enabled: false
+  red_team:
+    code_vs_design:
+      enabled: false

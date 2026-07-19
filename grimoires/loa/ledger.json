@@ -1,8 +1,16 @@
 {
-  "version": "1.0.0",
-  "cycles": [],
-  "active_cycle": null,
-  "active_bugfix": null,
-  "global_sprint_counter": 0,
-  "bugfix_cycles": []
+  "schema_version": 1,
+  "active_cycle": "cycle-auth-linking-adapt-2026-07-19",
+  "cycles": [
+    {
+      "id": "cycle-auth-linking-adapt-2026-07-19",
+      "label": "Auth-linking adapt + user ES256 plane",
+      "status": "active",
+      "created_at": "2026-07-19T22:00:00Z",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint": "grimoires/loa/sprint.md",
+      "decisions": ["D-ADAPT-001", "D-JWT-001", "D-MCP-001", "D-MERGE-DONE"]
+    }
+  ]
 }

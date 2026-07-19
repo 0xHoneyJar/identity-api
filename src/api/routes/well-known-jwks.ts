@@ -1,8 +1,11 @@
 /**
- * GET /.well-known/jwks.json — public JWKS document (identity-api#29).
+ * GET /.well-known/jwks.json — public JWKS document (identity-api#29 · D-JWT-001).
  *
- * Publishes svc-class ES256 public keys from env (`SVC_JWT_SIGNING_KEY_*`).
- * User-class keys land in the same document when provisioned (forward-track).
+ * Publishes both kid-prefix planes from env:
+ *   - user-*: USER_JWT_SIGNING_KEY_* (user-session verification)
+ *   - svc-*:  SVC_JWT_SIGNING_KEY_*  (svc-JWT / cell verification)
+ *
+ * Planes are operationally independent — rotating one does not affect the other.
  */
 
 import { jsonResponse } from "@hyper/core"
@@ -12,10 +15,11 @@ import { route } from "../../auth"
 export const wellKnownJwks = route
   .get("/.well-known/jwks.json")
   .meta({
-    summary: "JSON Web Key Set for svc-JWT verification",
+    summary: "JSON Web Key Set for user-session and svc-JWT verification",
     mcp: {
       title: "JWKS",
-      description: "Returns the public keys used to verify identity-api issued svc-JWTs.",
+      description:
+        "Returns public ES256 keys for identity-api issued tokens: user-session (user-* kids) and svc-JWTs (svc-* kids).",
     },
   })
   .handle(async () => {

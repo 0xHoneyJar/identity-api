@@ -1,15 +1,24 @@
 {
-  "framework_version": "1.157.0",
+  "framework_version": "1.196.0",
   "schema_version": 2,
-  "last_sync": "2026-05-24T23:17:14Z",
+  "last_sync": "2026-07-19T21:43:06Z",
   "zones": {
     "system": ".claude",
-    "state": ["grimoires/loa", ".beads"],
-    "app": ["src", "lib", "app"]
+    "state": [
+      "grimoires/loa",
+      ".beads"
+    ],
+    "app": [
+      "src",
+      "lib",
+      "app"
+    ]
   },
-  "migrations_applied": ["001_init_zones"],
+  "migrations_applied": [
+    "001_init_zones"
+  ],
   "integrity": {
     "enforcement": "strict",
-    "last_verified": "2026-05-24T23:17:14Z"
+    "last_verified": "2026-07-19T21:42:43Z"
   }
 }

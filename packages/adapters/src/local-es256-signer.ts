@@ -1,20 +1,25 @@
 /**
- * LocalEs256Signer — file/env-backed ES256 signer for svc-JWTs (W2.5 T-2.6).
+ * LocalEs256Signer — file/env-backed ES256 signers for svc-JWTs and
+ * user-session JWTs (W2.5 T-2.6 + D-JWT-001).
  *
- * Materializes D-1.1 §2 (JWKS layout) + §3 (per-request issuance). The
- * signer holds the active svc-kid private key + kid value; produces a
+ * Materializes D-1.1 §2 (JWKS layout) + §3 (per-request issuance). Each
+ * signer holds an active kid private key + kid value; produces a
  * compact-serialized JWT under the ES256 algorithm using `jose`.
+ *
+ * Two kid-prefix planes (MUST stay isolated):
+ *   - svc-*: SVC_JWT_SIGNING_KEY_PEM / _KID (+ optional _PREV)
+ *   - user-*: USER_JWT_SIGNING_KEY_PEM / _KID (+ optional _PREV)
  *
  * Env contract (D-1.1 §2):
  *   - SVC_JWT_SIGNING_KEY_PEM — PEM-encoded P-256 PKCS#8 private key
  *   - SVC_JWT_SIGNING_KEY_KID — active kid (e.g., "svc-2026-05-26-a")
  *   - SVC_JWT_SIGNING_KEY_PEM_PREV (optional) — previous key during rotation
  *   - SVC_JWT_SIGNING_KEY_KID_PREV (optional) — previous kid during rotation
+ *   - USER_JWT_SIGNING_KEY_PEM / _KID (+ optional _PREV) — user-session plane
  *
- * The PREV key/kid materialize the 2h overlap window from D-1.1 §7. T-2.6
- * does NOT consume the PREV pair (the route signs with the active kid only;
- * the PREV key exists in JWKS to validate in-flight tokens). PREV handling
- * lands when the JWKS endpoint composer is built (forward-track).
+ * The PREV key/kid materialize the 2h overlap window from D-1.1 §7. Issuance
+ * signs with the active kid only; PREV keys exist in JWKS so in-flight
+ * tokens continue to verify during rotation.
  *
  * Why this is a separate adapter (not inline in src/jwt-mint.ts):
  *   - svc-JWT signing is operationally independent from user-JWT signing
@@ -28,11 +33,9 @@
  *   - The package has `jose` as a dep already (consumed by JwksValidator);
  *     no new root-level dep is needed.
  *
- * The `ServiceJwtSigner` interface is the minimal narrow surface the
- * route consumer needs. The concrete `LocalEs256Signer` class implements
- * it with `jose.SignJWT`; tests can substitute any object with the same
- * shape (e.g., a signer over a known fixture keypair for deterministic
- * JWT output).
+ * The `ServiceJwtSigner` / `UserJwtSigner` interfaces are the minimal narrow
+ * surfaces route consumers need. Tests can substitute any object with the
+ * same shape (e.g., a signer over a known fixture keypair).
  */
 
 import { exportPKCS8, exportJWK, generateKeyPair, importPKCS8, SignJWT } from 'jose';
@@ -158,22 +161,134 @@ export async function createLocalEs256SignerFromEnv(): Promise<ServiceJwtSigner>
   return createLocalEs256Signer({ pkcs8Pem: pem, kid });
 }
 
-/** Export the public JWK for a svc signing key (JWKS document composer). */
-export async function exportSvcPublicJwk(
+/**
+ * Narrow ES256 signer surface for user-session JWTs (D-JWT-001).
+ * Same shape as ServiceJwtSigner; separate type so call sites stay plane-clear.
+ */
+export interface UserJwtSigner {
+  /** Active user-kid embedded into every produced JWT's protected header. */
+  readonly kid: string;
+  /** Sign a claim payload as a compact-serialized ES256 JWT. */
+  sign(payload: Record<string, unknown>): Promise<string>;
+}
+
+/** Config for the local user-session ES256 signer. */
+export interface LocalUserEs256SignerConfig {
+  /** PEM-encoded P-256 PKCS#8 private key. */
+  readonly pkcs8Pem: string;
+  /** Active user-kid (MUST start with `user-`). */
+  readonly kid: string;
+}
+
+/**
+ * Build a `UserJwtSigner` over a local in-memory ES256 key.
+ *
+ * Throws on:
+ *   - kid that doesn't start with `user-` (D-1.1 §1 / D-JWT-001).
+ *   - PEM that doesn't parse as a P-256 PKCS#8 private key.
+ */
+export async function createLocalUserEs256Signer(
+  config: LocalUserEs256SignerConfig,
+): Promise<UserJwtSigner> {
+  if (!config.kid.startsWith('user-')) {
+    throw new Error(
+      `LocalUserEs256Signer: kid must start with "user-" (got: ${config.kid}). ` +
+        'Svc-class kids carry the "svc-" prefix; mixing the two breaks ' +
+        'verifier kid-prefix disambiguation (D-1.1 §1 / D-JWT-001).',
+    );
+  }
+  const key = await importPKCS8(config.pkcs8Pem, 'ES256');
+  return {
+    kid: config.kid,
+    async sign(payload: Record<string, unknown>): Promise<string> {
+      return new SignJWT(payload)
+        .setProtectedHeader({ alg: 'ES256', typ: 'JWT', kid: config.kid })
+        .sign(key);
+    },
+  };
+}
+
+/**
+ * Build a `UserJwtSigner` from `USER_JWT_SIGNING_KEY_PEM` + `USER_JWT_SIGNING_KEY_KID`.
+ * Throws when either env var is unset or empty.
+ */
+export async function createLocalUserEs256SignerFromEnv(): Promise<UserJwtSigner> {
+  const pem = process.env.USER_JWT_SIGNING_KEY_PEM;
+  const kid = process.env.USER_JWT_SIGNING_KEY_KID;
+  if (!pem || !kid) {
+    throw new Error(
+      'LocalUserEs256Signer: USER_JWT_SIGNING_KEY_PEM and USER_JWT_SIGNING_KEY_KID ' +
+        'must both be set in env (D-JWT-001). Why: identity-api signs user-session ' +
+        'JWTs with the cell-shared ES256 user key declared in JWKS. Fix: provision ' +
+        'the key pair via grimoires/runbooks/user-session-es256.md and export both ' +
+        'env vars before boot.',
+    );
+  }
+  return createLocalUserEs256Signer({ pkcs8Pem: pem, kid });
+}
+
+/** Shared public-JWK export for ES256 PKCS#8 material (JWKS document composer). */
+async function exportEs256PublicJwk(
   pkcs8Pem: string,
   kid: string,
 ): Promise<Record<string, unknown>> {
   const key = await importPKCS8(pkcs8Pem, 'ES256', { extractable: true });
   const jwk = await exportJWK(key);
-  return { ...jwk, kid, use: 'sig', alg: 'ES256' };
+  // importPKCS8 yields a private CryptoKey; exportJWK includes `d`. JWKS
+  // must publish verification material only — strip private fields.
+  const { d: _d, ...pub } = jwk;
+  return { ...pub, kid, use: 'sig', alg: 'ES256' };
+}
+
+/** Export the public JWK for a svc signing key (JWKS document composer). */
+export async function exportSvcPublicJwk(
+  pkcs8Pem: string,
+  kid: string,
+): Promise<Record<string, unknown>> {
+  return exportEs256PublicJwk(pkcs8Pem, kid);
+}
+
+/** Export the public JWK for a user-session signing key (JWKS document composer). */
+export async function exportUserPublicJwk(
+  pkcs8Pem: string,
+  kid: string,
+): Promise<Record<string, unknown>> {
+  return exportEs256PublicJwk(pkcs8Pem, kid);
 }
 
 /**
- * Build the JWKS document from env (active + optional PREV rotation pair).
- * Returns `{ keys: [] }` when no svc key material is configured.
+ * Build the user-plane JWKS document from env (active + optional PREV).
+ * Used by the Hyper auth-jwt verifier so svc keys never authenticate
+ * user-session routes. Returns `{ keys: [] }` when unset.
+ */
+export async function buildUserJwksDocumentFromEnv(): Promise<{
+  keys: Record<string, unknown>[];
+}> {
+  const keys: Record<string, unknown>[] = [];
+  const pem = process.env.USER_JWT_SIGNING_KEY_PEM;
+  const kid = process.env.USER_JWT_SIGNING_KEY_KID;
+  if (pem && kid) {
+    keys.push(await exportUserPublicJwk(pem, kid));
+  }
+  const prevPem = process.env.USER_JWT_SIGNING_KEY_PEM_PREV;
+  const prevKid = process.env.USER_JWT_SIGNING_KEY_KID_PREV;
+  if (prevPem && prevKid) {
+    keys.push(await exportUserPublicJwk(prevPem, prevKid));
+  }
+  return { keys };
+}
+
+/**
+ * Build the full JWKS document from env: user-plane keys first, then
+ * svc-plane keys (active + optional PREV for each). Returns `{ keys: [] }`
+ * when no key material is configured on either plane.
  */
 export async function buildJwksDocumentFromEnv(): Promise<{ keys: Record<string, unknown>[] }> {
   const keys: Record<string, unknown>[] = [];
+
+  const userJwks = await buildUserJwksDocumentFromEnv();
+  keys.push(...userJwks.keys);
+
   const pem = process.env.SVC_JWT_SIGNING_KEY_PEM;
   const kid = process.env.SVC_JWT_SIGNING_KEY_KID;
   if (pem && kid) {

@@ -33,7 +33,12 @@
       "properties": {
         "mappings": {"type": "object"},
         "denylist": {"type": "array", "items": {"type": "string"}},
-        "max_cost_per_session_micro_usd": {"type": ["integer", "null"], "minimum": 0}
+        "max_cost_per_session_micro_usd": {"type": ["integer", "null"], "minimum": 0},
+        "effort_hints": {
+          "description": "cycle-114 FR-8: informational-only per-tier reasoning-effort hints. NOT consumed by the resolver/dispatch — advisory for operators + the economy roll-up.",
+          "type": "object",
+          "additionalProperties": {"enum": ["low", "medium", "high", "xhigh", "max"]}
+        }
       }
     },
     "routing": {"type": "object"},
@@ -117,7 +122,7 @@
         },
         "dispatch_group": {
           "type": "string",
-          "enum": ["anthropic-claude", "bedrock-anthropic", "google-gemini", "openai-gpt"],
+          "enum": ["anthropic-claude", "bedrock-anthropic", "cursor-composer", "google-gemini", "openai-gpt", "xai-grok"],
           "description": "cycle-110 sprint-2a T2.3 (SDD §3.2): logical model family for dispatch routing. Independent of provider — Bedrock-Anthropic models share this with native Anthropic API for capability-equivalence. KF-006-symmetric third occurrence: paired with auth_type, also landed in PR #904 commit 073842c0 without v2 schema admission. /bug #888 closure."
         },
         "api_format": {

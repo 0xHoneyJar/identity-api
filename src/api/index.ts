@@ -33,12 +33,12 @@ import { Hyper, jsonResponse, type Route } from "@hyper/core"
 import { hyperLog } from "@hyper/log"
 import { openapiPlugin, openapiHandlers } from "@hyper/openapi"
 import { zodConverter } from "@hyper/openapi-zod"
-import { authJwtPlugin } from "@hyper/auth-jwt"
+import { authJwtPlugin, type JWK } from "@hyper/auth-jwt"
 
 // Import auth.ts FIRST so installAuthMethod runs before any route module
 // uses .auth(). (Route modules below transitively import auth.ts too —
 // this explicit import is belt-and-suspenders + a grep-friendly anchor.)
-import { JWT_SECRET, route } from "../auth"
+import { JWT_SECRET, USER_SESSION_JWKS, route } from "../auth"
 
 // Routes. Each file imports `route` from `../auth` so the L4 install order
 // is correct.
@@ -72,7 +72,8 @@ const app = new Hyper()
   .use(
     authJwtPlugin({
       secret: JWT_SECRET,
-      algorithms: ["HS256"], // TODO(sprint-1.1-3): swap to ["ES256"] when src/auth.ts swaps
+      algorithms: ["HS256", "ES256"],
+      jwks: { keys: USER_SESSION_JWKS.keys as JWK[] },
     }),
   )
   // Register all spine routes. Hyper's `.use()` accepts `UseArg[]` — a heterogeneous

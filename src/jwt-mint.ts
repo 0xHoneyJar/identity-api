@@ -1,62 +1,46 @@
 /**
- * src/jwt-mint.ts — minimal JWT minter for T1.6.
+ * src/jwt-mint.ts — user-session JWT minter (T1.6 + D-JWT-001).
  *
- * The verify path's last step is "issue a session JWT" — for v1 we mint
- * HS256 against the same JWT_SECRET the verifier uses. This module is the
- * minimum needed for T1.6's verify endpoint.
+ * Preferred path (D-JWT-001 / FR-J2): ES256 via `createLocalUserEs256Signer`
+ * when `USER_JWT_SIGNING_KEY_PEM` + `USER_JWT_SIGNING_KEY_KID` are set.
+ * Public keys are published on `/.well-known/jwks.json` (user- plane).
+ *
+ * Transition fallback (non-production only): HS256 against JWT_SECRET so
+ * existing tests and local boots keep working until user keys are provisioned.
+ * Production (`NODE_ENV=production`) requires user ES256 keys and fails loud.
  *
  * Per PRD §4.4 (FR-J1..J3) the long-term posture is:
  *   - FR-J1: mint-jwt-orchestrator constructs claims, NEVER signs.
- *   - FR-J2: LocalEs256Signer adapter; own JWKS at /.well-known/jwks.json,
- *            overlap-window key rotation (harvested from loa-freeside).
+ *   - FR-J2: LocalUserEs256Signer; JWKS at /.well-known/jwks.json,
+ *            overlap-window key rotation.
  *   - FR-J3: HttpJWTSigner seam — swap to platform Rust gateway /issue
  *            with a one-line change.
- *
- * This module is the V1-PROVISIONAL signer:
- *   - HS256 (Sprint-1.1 follow-up #3 swaps to ES256 via jose).
- *   - Inline construction + signing — no port indirection yet.
- *   - Same JWT_SECRET from src/auth.ts (so the verifier mounted there
- *     accepts what we mint here).
  *
  * Claims shape (T1.6):
  *   {
  *     sub:    <user_id (UUID)>,
  *     wallets: [{ chain: 'ethereum', address: <primary wallet> }],
- *     tenant: 'freeside',   // default; per-world tokens land in T2.x
+ *     tenant: 'freeside',
  *     iss:    'identity-api',
- *     aud:    'freeside',   // per-world audience lands in T2.x
+ *     aud:    'freeside',
  *     iat:    <unix>,
  *     exp:    <unix + 3600>,
  *     jti:    <uuid v4>,
  *     v:      1,
  *   }
  *
- * This is a STRICT SUBSET of `packages/protocol/jwt-claims.schema.json` —
- * the schema's full surface (tier, display_name, discord_id, nft_id, etc.)
- * is populated by the compose edge (T2.x) when world context is known. T1.6
- * mints the minimum-viable session claim that unlocks /v1/me (FR-A3).
- *
- * Why we DON'T import the protocol's JWTClaim Zod schema for runtime
- * construction: we'd need to forward 11 required fields (some optional we
- * intentionally leave unset). Constructing the literal object inline keeps
- * this v1-provisional minter readable; the schema validates the shape on
- * the verifier side (the consumer can call assertTenantBoundary). When
- * the LocalEs256Signer lands at Sprint-1.1 #3, the construction will use
- * `JWTClaimSchema.parse(payload)` as the gate before signing.
- *
  * SECURITY NOTES:
- *   - The HS256 secret IS the verification key — the same JWT_SECRET that
- *     authJwt validates against. A leak of JWT_SECRET = forgeable tokens.
- *     Production MUST set JWT_SECRET via env (the loadSecret check in
- *     src/auth.ts fail-fasts in NODE_ENV=production if unset/short).
- *   - jti is UUIDv4 from crypto.randomUUID — collision space is 2^122,
- *     not enforced by a denylist in V1 (per protocol schema docstring:
- *     "jti denylist is V2"). Until V2, jti is a unique identifier but
- *     NOT a revocation handle.
- *   - exp is 1h per PRD §4.4 FR-J2 ("1h TTL per Lock-8"). Clock-skew
- *     tolerance is the verifier's job (Hyper's verifyJwt has 30s default).
+ *   - ES256: private key stays in env; JWKS publishes verification material only.
+ *   - HS256 fallback: JWT_SECRET is the verification key — a leak = forgeable
+ *     tokens. Production must not use this path.
+ *   - jti is UUIDv4; denylist is V2.
+ *   - exp is 1h per PRD §4.4 FR-J2 / Lock-8.
  */
 
+import {
+  createLocalUserEs256Signer,
+  type UserJwtSigner,
+} from "@freeside-auth/adapters"
 import { JWT_SECRET } from "./auth"
 
 /** Default session TTL = 1 hour (per loa-freeside Lock-8). */
@@ -105,6 +89,8 @@ export interface MintSessionJwtResult {
   readonly token: string
   readonly expiresAt: number // unix seconds
   readonly jti: string
+  /** Signing algorithm used for this token (`ES256` preferred, `HS256` fallback). */
+  readonly alg: "ES256" | "HS256"
   // Echo the claims we minted for downstream introspection (audit log
   // payload, integration test assertions). Subset of JWTClaim — matches the
   // shape we encode into the token.
@@ -121,12 +107,50 @@ export interface MintSessionJwtResult {
   }
 }
 
+/** Cached user signer: undefined = not probed, null = HS256 fallback. */
+let _userSigner: UserJwtSigner | null | undefined
+
+/**
+ * Resolve the user ES256 signer from env, or null when falling back to HS256.
+ * Production requires USER_JWT_SIGNING_KEY_PEM + USER_JWT_SIGNING_KEY_KID.
+ */
+export async function resolveUserSessionSigner(): Promise<UserJwtSigner | null> {
+  if (_userSigner !== undefined) return _userSigner
+
+  const pem = process.env.USER_JWT_SIGNING_KEY_PEM
+  const kid = process.env.USER_JWT_SIGNING_KEY_KID
+
+  if (pem && kid) {
+    _userSigner = await createLocalUserEs256Signer({ pkcs8Pem: pem, kid })
+    return _userSigner
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "jwt-mint: USER_JWT_SIGNING_KEY_PEM and USER_JWT_SIGNING_KEY_KID are required " +
+        "in production (D-JWT-001). Why: user-session mint must be ES256 with " +
+        "user- kids published on JWKS; HS256 is transition-only. Fix: provision " +
+        "keys per grimoires/runbooks/user-session-es256.md.",
+    )
+  }
+
+  console.warn(
+    "[jwt-mint] USER_JWT_SIGNING_KEY_PEM / USER_JWT_SIGNING_KEY_KID unset; " +
+      "falling back to HS256 (JWT_SECRET). Set user ES256 keys for D-JWT-001 parity.",
+  )
+  _userSigner = null
+  return null
+}
+
+/** Test seam — clear the cached signer between cases. */
+export function __resetUserSessionSignerForTest(): void {
+  _userSigner = undefined
+}
+
 /**
  * Mint a session JWT.
  *
- * HS256 signing using SubtleCrypto + the JWT_SECRET. No port indirection
- * (yet) — Sprint-1.1 #3 swaps this for an ES256 LocalSigner via the
- * `JWTSigner` port.
+ * ES256 when user signing keys are configured; otherwise HS256 (non-prod only).
  */
 export async function mintSessionJwt(input: MintSessionJwtInput): Promise<MintSessionJwtResult> {
   const now = input.iat ?? Math.floor(Date.now() / 1000)
@@ -151,6 +175,12 @@ export async function mintSessionJwt(input: MintSessionJwtInput): Promise<MintSe
     v: 1 as const,
   }
 
+  const signer = await resolveUserSessionSigner()
+  if (signer) {
+    const token = await signer.sign(claims as unknown as Record<string, unknown>)
+    return { token, expiresAt: exp, jti, alg: "ES256", claims }
+  }
+
   const token = await signHs256(
     { alg: "HS256", typ: "JWT" },
     claims as unknown as Record<string, unknown>,
@@ -161,21 +191,16 @@ export async function mintSessionJwt(input: MintSessionJwtInput): Promise<MintSe
     token,
     expiresAt: exp,
     jti,
+    alg: "HS256",
     claims,
   }
 }
 
-// ─── HS256 signing primitive ───────────────────────────────────────────────
+// ─── HS256 signing primitive (transition fallback) ─────────────────────────
 
 /**
- * Minimal HS256 signer. Matches the test helper pattern in
- * src/api/__tests__/routes.test.ts but lives in production code so the
- * route handler at /v1/auth/verify can produce valid tokens.
- *
- * Verified-against: src/hyper/auth-jwt/jwt.ts (the verifier) uses the same
- * `crypto.subtle.importKey` + `crypto.subtle.sign` pattern for HMAC SHA-256,
- * so the wire shape we produce here is byte-for-byte what the verifier
- * accepts.
+ * Minimal HS256 signer for the non-prod fallback path. Matches the verifier
+ * in src/hyper/auth-jwt/jwt.ts (HMAC SHA-256 via SubtleCrypto).
  */
 async function signHs256(
   header: { alg: "HS256"; typ: "JWT" },
