@@ -14,71 +14,68 @@ capability_requirements:
   - git: read_write
   - shell: execute
   - github_api: read_write (scope: external)
-version: 0.1.0
+version: loa@v1.196.0
 installation_mode: unknown
 trust_level: L2-verified
 -->
 
 # identity-api
 
-<!-- provenance: DERIVED -->
+<!-- provenance: CODE-FACTUAL -->
 identity-api — the central identity SoR for the freeside ecosystem. Hyper-based single-service building: wallet-first auth (SIWE + legacy EIP-191), resolution spine (users / wallets[] / credentials / per-world nyms), read-time compose over inventory + score + codex. Externally consumed as source-distributed vendored client (NOT npm).
 
-The framework provides 40 specialized skills, built with TypeScript/JavaScript, Python, Shell.
+The framework provides 41 specialized skills, built with TypeScript/JavaScript, Python, Shell.
 
 ## Key Capabilities
-<!-- provenance: DERIVED -->
-The project exposes 15 key entry points across its public API surface.
+<!-- provenance: CODE-FACTUAL -->
 
-### .claude/commands/scripts
-
-- **check_audit_prerequisites** — Check prerequisites for audit phase (`./.claude/commands/scripts/common.sh:148`)
-- **check_dir_exists** — Check if a directory exists (`./.claude/commands/scripts/common.sh:47`)
-- **check_file_exists** — Check if a file exists (`./.claude/commands/scripts/common.sh:38`)
-- **check_implement_prerequisites** — Check prerequisites for implementation phase (`./.claude/commands/scripts/common.sh:133`)
-- **check_review_prerequisites** — Check prerequisites for review phase (`./.claude/commands/scripts/common.sh:140`)
-- **check_reviewer_report** — Check if reviewer.md exists for a sprint (`./.claude/commands/scripts/common.sh:117`)
-- **check_senior_approval** — Check if senior lead has approved the sprint (`./.claude/commands/scripts/common.sh:103`)
-- **check_setup_complete** — Check if setup has been completed (`./.claude/commands/scripts/common.sh:56`)
-- **check_sprint_dir** — Check if sprint directory exists (`./.claude/commands/scripts/common.sh:125`)
-- **check_sprint_in_plan** — Check if sprint exists in sprint.md (`./.claude/commands/scripts/common.sh:77`)
-- **check_sprint_not_completed** — Check if sprint is already completed (`./.claude/commands/scripts/common.sh:93`)
-- **error** — Print error message and exit (`./.claude/commands/scripts/common.sh:14`)
-- **get_user_type** — Get user type from setup marker (`./.claude/commands/scripts/common.sh:63`)
-- **is_thj_user** — Check if user is THJ developer (`./.claude/commands/scripts/common.sh:72`)
-- **success** — Print success message (`./.claude/commands/scripts/common.sh:25`)
+### API Surface
+#### HTTP (registered in `src/api/index.ts`)
+- Area — Routes (files)
+- Health — `routes/health.ts`
+- Auth — `auth.ts` challenge/verify
+- Me — `me.ts`
+- Resolve — `resolve.ts` wallet/account/nym/identity
+- Profile — `profile.ts` getProfile, getMiberaDimensions
+- Batch — `identity-resolve.ts`
+- Link — `link.ts` verified-wallet, wallet-only
+- Discord — `discord-link.ts`, `auth-discord.ts`
+- JWKS — `well-known-jwks.ts`
+- svc-JWT — `v1/auth/service-jwt`, denylist check
+- CM — `v1/users/managed-worlds`
+- Docs — `/openapi.json`, `/docs`
+#### Package exports (consumers)
+- Package — Surface
+- `@freeside-auth/identity-client` (`packages/sdk`) — Typed HTTP client
+- `@freeside-auth/auth-sdk` — svc-JWT verify / JWKS cache
+- `@freeside-auth/protocol` — Schemas / types
 
 ## Architecture
-<!-- provenance: DERIVED -->
-The architecture follows a three-zone model: System (`.claude/`) contains framework-managed scripts and skills, State (`grimoires/`, `.beads/`) holds project-specific artifacts and memory, and App (`src/`, `lib/`) contains developer-owned application code. The framework orchestrates       40 specialized skills through slash commands.
+<!-- provenance: CODE-FACTUAL -->
+The architecture follows a three-zone model: System (`.claude/`) contains framework-managed scripts and skills, State (`grimoires/`, `.beads/`) holds project-specific artifacts and memory, and App (`src/`, `lib/`) contains developer-owned application code. The framework orchestrates       41 specialized skills through slash commands.
 ```mermaid
 graph TD
-    coverage[coverage]
     docs[docs]
     grimoires[grimoires]
     packages[packages]
     scripts[scripts]
-    spike[spike]
     src[src]
+    tests[tests]
     Root[Project Root]
-    Root --> coverage
     Root --> docs
     Root --> grimoires
     Root --> packages
     Root --> scripts
-    Root --> spike
     Root --> src
+    Root --> tests
 ```
 Directory structure:
 ```
-./coverage
-./coverage/tmp
 ./docs
 ./grimoires
+./grimoires/freeside
 ./grimoires/loa
 ./grimoires/runbooks
-./grimoires/specs
-./grimoires/tracks
 ./packages
 ./packages/adapters
 ./packages/auth-sdk
@@ -90,15 +87,15 @@ Directory structure:
 ./packages/ui
 ./scripts
 ./scripts/__tests__
-./spike
-./spike/gen-client.ts
 ./src
 ./src/api
 ./src/hyper
+./tests
+./tests/acvp
 ```
 
 ## Interfaces
-<!-- provenance: DERIVED -->
+<!-- provenance: CODE-FACTUAL -->
 ### Skill Commands
 
 #### Loa Core
@@ -116,10 +113,10 @@ Directory structure:
 - **/enhancing-prompts** — Enhancing Prompts
 - **/eval-running** — Eval Running Skill
 - **/flatline-knowledge** — Provides optional NotebookLM integration for the Flatline Protocol, enabling external knowledge retrieval from curated AI-powered notebooks.
-- **/flatline-reviewer** — Uflatline reviewer
-- **/flatline-scorer** — Uflatline scorer
-- **/flatline-skeptic** — Uflatline skeptic
-- **/gpt-reviewer** — Ugpt reviewer
+- **/flatline-reviewer** — Flatline reviewer
+- **/flatline-scorer** — Flatline scorer
+- **/flatline-skeptic** — Flatline skeptic
+- **/gpt-reviewer** — Gpt reviewer
 - **/implementing-tasks** — Sprint Task Implementer
 - **/managing-credentials** — /loa-credentials — Credential Management
 - **/mounting-framework** — Mounting the Loa Framework
@@ -136,9 +133,10 @@ Directory structure:
 
 - **/cost-budget-enforcer** — Daily token-cap enforcement for autonomous Loa cycles. Replaces the
 - **/cross-repo-status-reader** — Read structured cross-repo state for ≤50 repos in parallel via `gh api`, with TTL cache + stale fallback, BLOCKER extraction from each repo's `grimoires/loa/NOTES.md` tail, and per-source error capture so one repo's failure does not abort the full read. The operator-visibility primitive for the Agent-Network Operator (P1).
-- **/flatline-attacker** — Uflatline attacker
+- **/flatline-attacker** — Flatline attacker
 - **/graduated-trust** — The L4 primitive maintains a per-(scope, capability, actor) trust ledger
 - **/hitl-jury-panel** — Replace `AskUserQuestion`-class decisions during operator absence with a panel of ≥3 deliberately-diverse panelists. Each panelist (model + persona) returns a view and reasoning; the skill logs all views BEFORE selection, then picks one binding view via a deterministic seed derived from `(decision_id, context_hash)`. Provides an autonomous adjudication primitive without compromising auditability.
+- **/loa-aleph** — Loa Aleph host orchestration
 - **/loa-setup** — /loa setup — Onboarding Wizard
 - **/scheduled-cycle-template** — Compose `/schedule` (cron registration) with the existing autonomous-mode primitives into a generic 5-phase cycle: **read state → decide → dispatch → await → log**. Caller plugs five small phase scripts (the *DispatchContract*) into a YAML; the L3 lib runs them under a flock, records every phase to a hash-chained audit log, and (optionally) consults the L2 cost gate before letting any work begin.
 - **/soul-identity-doc** — L7 soul-identity-doc
@@ -147,21 +145,21 @@ Directory structure:
 - **/validating-construct-manifest** — Validate a construct pack directory before it lands in a registry or a local install. Surfaces:
 
 ## Module Map
-<!-- provenance: DERIVED -->
+<!-- provenance: CODE-FACTUAL -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
-| `coverage/` | 2 | Ucoverage | \u2014 |
 | `docs/` | 3 | Documentation | \u2014 |
-| `grimoires/` | 108 | Loa state and memory files | \u2014 |
-| `packages/` | 152 | Documentation | \u2014 |
-| `scripts/` | 7 | Utility scripts | \u2014 |
-| `spike/` | 1405 | Uspike | \u2014 |
-| `src/` | 81 | Source code | \u2014 |
+| `grimoires/` | 182 | Loa state and memory files | \u2014 |
+| `packages/` | 174 | Documentation | \u2014 |
+| `scripts/` | 12 | Utility scripts | \u2014 |
+| `src/` | 96 | Source code | \u2014 |
+| `tests/` | 3 | Test suites | \u2014 |
 
 ## Verification
 <!-- provenance: CODE-FACTUAL -->
 - Trust Level: **L2 — CI Verified**
-- CI/CD: GitHub Actions (1 workflows)
+- 3 test files across 1 suite
+- CI/CD: GitHub Actions (2 workflows)
 - Type safety: TypeScript
 
 ## Agents
@@ -177,6 +175,7 @@ The project defines 1 specialized agent persona.
 ### Dependencies
 - `@types/bun`
 - `@usehyper/cli`
+- `jose`
 - `typescript`
 - `viem`
 - `zod`
@@ -190,17 +189,17 @@ Available commands:
 - `npm run build` — bun
 - `npm run test` — bun
 <!-- ground-truth-meta
-head_sha: 05c533cdbdbf94a7c7ff081200721ff5e067e0ea
-generated_at: 2026-06-01T18:56:09Z
+head_sha: 446f337593194fc2214abf91b9d055315e21d884
+generated_at: 2026-07-19T22:00:09Z
 generator: butterfreezone-gen v1.0.0
 sections:
-  agent_context: 7ae89494865852a9f73d536c07238701977f03776aeea0dcf7a5f7c77a928b87
-  capabilities: b1901b285afaff1ab69386c70539785c317413a7749845657cd1520bae196dec
-  architecture: e381f746602f858fd558b6553e797d5174497439aefa452748fa0c39df90812e
-  interfaces: f2a41f373dd0b133e7dffd3d0aa2e0beadf9875183d5001fbd283fab6b99b16a
-  module_map: e512009b9c52c36a3422d1d916215cb30da08d3c8eb6d2d33273381db79a04e9
-  verification: a59789866c39f86c188d1f601b7b94205f06c5504cb4b51903bd48bb53208886
+  agent_context: 7895c2240bf3c6bc655ef954d5848dce3102a7331e53c9cdd16792c92c6255e1
+  capabilities: eac5157c375e3302e37005b49cbcdd4b16d2328c11ce36c57eec113dad885d18
+  architecture: 36ed36a6001b92cda504d5abe69994db6bce8d35a1903f7a9c068aa2baa472d7
+  interfaces: 154ee7c6c0b3e2256f53301ef8aae7841bc9d71f83ca347b5aeff01f12fe137d
+  module_map: 1a2f3a08bfc5198d2c0cc501df6fef3a23190ae6b561bbdbca7fd45905711d5e
+  verification: c49674d7283e0b9e5d3c3c64991bb2db8df42d72478090bca25303476cdb57ff
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
-  ecosystem: bf204a5475b7b85166f8ab5325771e6e95bea3ec48cbd49fb690edeba4780999
+  ecosystem: 616f402774141d02cf9efcaf76f7fac43b8a50ba9d2971a9f8767c1159fc39cf
   quick_start: eade50bb4d2a23f52903ea46cb5f7afc98b9d6795d48f48ee4ece1a0e5dff6db
 -->
