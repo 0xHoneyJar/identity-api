@@ -33,12 +33,12 @@ Prior merge-facade sprint is **shipped**. This plan closes the highest-leverage 
 
 ### Deliverables
 
-- [ ] **D1** — User-session `LocalEs256Signer` (or kid-namespaced variant) wired for session mint; distinct kid from `svc-*`
-- [ ] **D2** — `src/jwt-mint.ts` (or successor) calls `JWTSigner.sign` only — no `HS256` in production path
-- [ ] **D3** — `well-known-jwks` publishes user verification JWK(s) alongside svc keys with clear kid separation
-- [ ] **D4** — `authJwtPlugin` / session verify accepts ES256 user tokens (JWKS or injected keyset)
-- [ ] **D5** — Tests: mint → verify round-trip; svc token rejected as user session; kid prefix guards
-- [ ] **D6** — Short runbook note under `grimoires/runbooks/` for session key rotation
+- [x] **D1** — User-session `LocalEs256Signer` (or kid-namespaced variant) wired for session mint; distinct kid from `svc-*`
+- [x] **D2** — `src/jwt-mint.ts` (or successor) calls `JWTSigner.sign` only — no `HS256` in production path
+- [x] **D3** — `well-known-jwks` publishes user verification JWK(s) alongside svc keys with clear kid separation
+- [x] **D4** — `authJwtPlugin` / session verify accepts ES256 user tokens (JWKS or injected keyset)
+- [x] **D5** — Tests: mint → verify round-trip; svc token rejected as user session; kid prefix guards
+- [x] **D6** — Short runbook note under `grimoires/runbooks/` for session key rotation
 
 ### Tasks
 
@@ -64,11 +64,11 @@ Prior merge-facade sprint is **shipped**. This plan closes the highest-leverage 
 
 ### Deliverables
 
-- [ ] **D7** — Discord link complete rejects mismatched session subject (test-first)
+- [x] **D7** — Discord link complete rejects mismatched session subject (already in `discord-link.ts` state.sub === session; covered by existing route tests)
 - [ ] **D8** — Cross-user `linked_accounts` collision audited (engine already partial — close gaps + tests)
 - [ ] **D9** — Grep gate: no email/handle auto-link in link routes/engine
-- [ ] **D10** — CLAUDE.md hard-rules aligned to SoR writer + JWTSigner
-- [ ] **D11** — Handoff context README: adapt-not-paste + D-ADAPT-001
+- [x] **D10** — CLAUDE.md hard-rules aligned to SoR writer + JWTSigner
+- [x] **D11** — Handoff context README: adapt-not-paste + D-ADAPT-001 (`ADAPT.md`)
 
 ### Tasks
 

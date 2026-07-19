@@ -94,6 +94,10 @@ describe('buildJwksDocumentFromEnv dual-plane', () => {
     expect(doc.keys[1]?.kid).toBe('svc-jwks-a');
     expect(doc.keys[0]?.alg).toBe('ES256');
     expect(doc.keys[1]?.alg).toBe('ES256');
+    // F004 regression: public JWKS must never leak private key material
+    for (const jwk of doc.keys) {
+      expect(jwk).not.toHaveProperty('d');
+    }
   });
 
   it('buildUserJwksDocumentFromEnv excludes svc keys', async () => {
