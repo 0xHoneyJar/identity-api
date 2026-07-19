@@ -66,16 +66,22 @@ export {
   BUN_PASSWORD_HASH_OPTIONS,
 } from './argon2-params';
 
-// LocalEs256Signer — ES256 svc-JWT signer (W2.5 T-2.6 · D-1.1 §2)
-// Consumed by the /v1/auth/service-jwt route handler.
+// LocalEs256Signer — ES256 svc-JWT + user-session signers (W2.5 T-2.6 · D-JWT-001)
+// svc: /v1/auth/service-jwt · user: src/jwt-mint.ts session mint
 export {
   createLocalEs256Signer,
   createLocalEs256SignerFromEnv,
+  createLocalUserEs256Signer,
+  createLocalUserEs256SignerFromEnv,
   exportSvcPublicJwk,
+  exportUserPublicJwk,
+  buildUserJwksDocumentFromEnv,
   buildJwksDocumentFromEnv,
   __generateTestEs256KeyMaterial,
   type ServiceJwtSigner,
   type LocalEs256SignerConfig,
+  type UserJwtSigner,
+  type LocalUserEs256SignerConfig,
 } from './local-es256-signer';
 
 // HTTP JWT signer (B-1.4 · §12.3 delegation default · points at loa-freeside/apps/gateway)

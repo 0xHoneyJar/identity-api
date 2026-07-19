@@ -34,15 +34,14 @@
  * makes the L4/L5/L7 pairing enforceable by code review (a `.auth()` chain
  * that imported `route` from `@hyper/core` directly is grep-detectable).
  *
- * Sprint-1.1 follow-up #3 — ES256 swap: this module currently uses HS256
- * per the T1.0 spike. SDD FR-J2 specifies ES256 (D7). Either (a) verify
- * `@hyper/auth-jwt` supports ES256 in `jwt.ts`, or (b) swap to an in-house
- * `jose`-based verifier reusing `packages/adapters/src/jwks-validator.ts`.
- * TODO(T-future/sprint-1.1-3): perform the swap; this comment is the seam.
+ * D-JWT-001 — dual-verify user sessions: ES256 (user JWKS) + HS256
+ * (JWT_SECRET) during transition. Mint prefers ES256 when
+ * USER_JWT_SIGNING_KEY_* are set (see src/jwt-mint.ts).
  */
 
+import { buildUserJwksDocumentFromEnv } from "@freeside-auth/adapters"
 import { route, type Middleware } from "@hyper/core"
-import { authJwt, installAuthMethod, JwtError } from "@hyper/auth-jwt"
+import { authJwt, installAuthMethod, JwtError, type JWK } from "@hyper/auth-jwt"
 import { csrfGuard, memorySessions, session, type SessionStore } from "@hyper/session"
 
 // ---------------------------------------------------------------------------
@@ -77,6 +76,11 @@ function loadSecret(envName: string, dev_fallback_length = 32): string {
 export const JWT_SECRET = loadSecret("JWT_SECRET")
 export const SESSION_SECRET = loadSecret("SESSION_SECRET")
 
+// User-plane JWKS for ES256 session verify (svc- keys stay off this path).
+// Exported so routes that call verifyJwt directly (e.g. managed-worlds)
+// share the same dual-plane material as `.auth()`.
+export const USER_SESSION_JWKS = await buildUserJwksDocumentFromEnv()
+
 // ---------------------------------------------------------------------------
 // L4 fix: install .auth() on RouteBuilder.prototype BEFORE any route file
 // chains it. Anything that imports `route` from this module is now safe to
@@ -88,13 +92,13 @@ export const SESSION_SECRET = loadSecret("SESSION_SECRET")
 // as a 500. The hardened middleware is what gets installed onto the
 // RouteBuilder prototype; every `.auth()` chain transitively uses the wrap.
 //
-// We DON'T patch src/hyper/auth-jwt/jwt.ts directly (path-II option in the
-// brief) — keeps hyper.lock.json pristine. Sprint-1.1 follow-up #6 will land
-// the upstream patch + remove this wrap.
+// Dual-verify (D-JWT-001): accept ES256 (user JWKS) and HS256 (JWT_SECRET)
+// so existing HS256 sessions/tests keep working during the transition.
 // ---------------------------------------------------------------------------
 const jwtMw = authJwt({
   secret: JWT_SECRET,
-  algorithms: ["HS256"], // TODO(sprint-1.1-3): swap to ["ES256"] — see header comment
+  algorithms: ["HS256", "ES256"],
+  jwks: { keys: USER_SESSION_JWKS.keys as JWK[] },
 })
 const hardenedJwtMw = hardenAuthMiddleware(jwtMw)
 installAuthMethod(hardenedJwtMw)
